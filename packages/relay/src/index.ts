@@ -4,6 +4,7 @@ import { mintToken, readBearer, verifyToken } from "./auth"
 import { PairingStore } from "./pair"
 import { TunnelBroker, type TunnelSender } from "./tunnel"
 import { CLIENT_TOKEN_TTL_MS, type ClaimRequest, type ClaimResponse, type PairResponse, type TunnelFrame } from "./protocol"
+import { UI_HTML } from "./ui"
 
 export type RelayOptions = {
   secret: string
@@ -18,6 +19,16 @@ export function createRelay(opts: RelayOptions) {
   const app = new Hono()
 
   app.get("/health", (c) => c.json({ ok: true }))
+
+  // Mobile/web pairing UI. The path segment is advisory — the page reads the
+  // code from window.location, so typos surface inside the SPA rather than 404.
+  app.get("/r/:code", (c) =>
+    c.html(UI_HTML, 200, {
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+    }),
+  )
 
   app.post("/pair", async (c) => {
     const record = pairings.create()
