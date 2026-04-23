@@ -75,14 +75,51 @@ export namespace Container {
     return `${WORKSPACE_TARGET}/${posixRel}`
   }
 
-  const ENV_SKIP = new Set(["PWD", "OLDPWD", "HOME", "SHELL", "TMPDIR", "TMP", "TEMP", "USER", "LOGNAME"])
+  const ENV_SKIP = new Set([
+    "PWD",
+    "OLDPWD",
+    "HOME",
+    "SHELL",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "USER",
+    "LOGNAME",
+    // Host toolchain paths: replacing these in the container breaks command resolution.
+    "PATH",
+    "MANPATH",
+    "INFOPATH",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FALLBACK_LIBRARY_PATH",
+    "NODE",
+    "NODE_PATH",
+    "NODE_OPTIONS",
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
+    "OSTYPE",
+    "MACHTYPE",
+    "HOSTTYPE",
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "XPC_FLAGS",
+    "XPC_SERVICE_NAME",
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "SSH_CONNECTION",
+    "SSH_CLIENT",
+    "SSH_TTY",
+  ])
+  const ENV_SKIP_PREFIX = ["BASH_", "ZSH_", "NVM_", "FNM_", "VOLTA_", "PYENV_", "RBENV_", "XDG_", "__CF"]
 
   function envArgs(env: NodeJS.ProcessEnv): string[] {
     const out: string[] = []
     for (const [k, v] of Object.entries(env)) {
       if (v === undefined) continue
       if (ENV_SKIP.has(k)) continue
-      if (k.startsWith("BASH_") || k.startsWith("ZSH_")) continue
+      if (ENV_SKIP_PREFIX.some((prefix) => k.startsWith(prefix))) continue
       out.push("-e", `${k}=${v}`)
     }
     return out
@@ -187,7 +224,7 @@ export namespace Container {
     await Docker.ensureImage(cfg.image)
 
     // Fire-and-forget sweep of stale containers from crashed sessions.
-    Docker.sweepStale(Container.SESSION_LABEL).catch(() => {})
+    Docker.sweepStale(SESSION_LABEL).catch(() => {})
 
     let mountSource = hostDir
     let copyTempDir: string | null = null
@@ -195,26 +232,37 @@ export namespace Container {
     if (cfg.mode === "copy") {
       copyTempDir = path.join(Global.Path.data, "container", sessionID, "workspace")
       await fs.mkdir(path.dirname(copyTempDir), { recursive: true })
-      await Copy.sync(hostDir, copyTempDir, cfg.exclude)
+      try {
+        await Copy.sync(hostDir, copyTempDir, cfg.exclude)
+      } catch (err) {
+        await Copy.cleanup(copyTempDir).catch(() => {})
+        throw err
+      }
       mountSource = copyTempDir
     }
 
     const name = `opencode-${sessionID.slice(0, 12)}-${Date.now()}`
-    const containerID = await Docker.runBackground({
-      name,
-      image: cfg.image,
-      workdir: WORKSPACE_TARGET,
-      mount: { source: mountSource, target: WORKSPACE_TARGET },
-      network: cfg.network,
-      memory: cfg.memory,
-      cpus: cfg.cpus,
-      pids: cfg.pids,
-      runAsCurrentUser: cfg.runAsCurrentUser,
-      labels: {
-        [Container.SESSION_LABEL]: sessionID,
-        "opencode.mode": cfg.mode,
-      },
-    })
+    let containerID: string
+    try {
+      containerID = await Docker.runBackground({
+        name,
+        image: cfg.image,
+        workdir: WORKSPACE_TARGET,
+        mount: { source: mountSource, target: WORKSPACE_TARGET },
+        network: cfg.network,
+        memory: cfg.memory,
+        cpus: cfg.cpus,
+        pids: cfg.pids,
+        runAsCurrentUser: cfg.runAsCurrentUser,
+        labels: {
+          [SESSION_LABEL]: sessionID,
+          "opencode.mode": cfg.mode,
+        },
+      })
+    } catch (err) {
+      if (copyTempDir) await Copy.cleanup(copyTempDir).catch(() => {})
+      throw err
+    }
 
     log.info("container started", { containerID: containerID.slice(0, 12), mode: cfg.mode, mountSource })
 

@@ -6,6 +6,7 @@ import { Instance } from "../project/instance"
 import { Container } from "../container"
 import { Flag } from "../flag/flag"
 import { Log } from "../util"
+import { UI } from "./ui"
 
 const log = Log.create({ service: "cli.bootstrap" })
 
@@ -28,12 +29,21 @@ export async function bootstrap<T>(
   if (cfg.mode !== "off") {
     const sessionID = ulid().toLowerCase()
     log.info("preparing container runtime", { mode: cfg.mode, sessionID })
+    UI.println(
+      `${UI.Style.TEXT_INFO_BOLD}container${UI.Style.TEXT_NORMAL} running in ${cfg.mode} mode (session ${sessionID}, image ${cfg.image})`,
+    )
     runtime = await Container.prepare(sessionID, directory, cfg)
     if (runtime.mode === "copy" && runtime.copyTempDir) {
       // In copy mode, redirect the instance's working directory to the isolated
       // workspace so file tools operate on the copy and bash exec paths inside the
       // container line up with host-side reads.
       boundDirectory = runtime.copyTempDir
+      UI.println(
+        `  ${UI.Style.TEXT_DIM}workspace: ${runtime.copyTempDir}${UI.Style.TEXT_NORMAL}`,
+      )
+      UI.println(
+        `  ${UI.Style.TEXT_DIM}export: opencode container export ${sessionID}${UI.Style.TEXT_NORMAL}`,
+      )
     }
   }
 
