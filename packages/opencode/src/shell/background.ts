@@ -4,6 +4,8 @@ import { Effect, Layer, Context, Schema } from "effect"
 import { InstanceState } from "@/effect"
 import { Log } from "@/util"
 import { killTree } from "./shell"
+import { Instance } from "../project/instance"
+import { Container } from "../container"
 
 const log = Log.create({ service: "shell.background" })
 
@@ -49,6 +51,13 @@ export type OutputResult = {
 const PS_NAMES = new Set(["powershell", "pwsh"])
 
 function buildSpawn(input: StartInput): ChildProcess {
+  const runtime = Instance.current.container
+  if (runtime && runtime.mode !== "off") {
+    const args = runtime.spawnArgs(input.shell, input.shellName, input.command, input.cwd, input.env)
+    const opts = Container.toNodeSpawnOptions(args, ["ignore", "pipe", "pipe"])
+    return spawn(args.file, args.args, opts)
+  }
+
   if (process.platform === "win32" && PS_NAMES.has(input.shellName)) {
     return spawn(
       input.shell,
