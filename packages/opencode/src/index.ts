@@ -15,7 +15,6 @@ import { InstallationVersion } from "./installation/version"
 import { NamedError } from "@opencode-ai/shared/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
-import { RemoteCommand } from "./cli/cmd/remote"
 import { Filesystem } from "./util"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
@@ -169,7 +168,6 @@ const cli = yargs(args)
   .command(UninstallCommand)
   .command(ServeCommand)
   .command(WebCommand)
-  .command(RemoteCommand)
   .command(ModelsCommand)
   .command(StatsCommand)
   .command(ExportCommand)
