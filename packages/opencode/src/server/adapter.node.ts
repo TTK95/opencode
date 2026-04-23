@@ -1,5 +1,6 @@
 import { createAdaptorServer, type ServerType } from "@hono/node-server"
 import { createNodeWebSocket } from "@hono/node-ws"
+import { createServer as createHttpsServer } from "node:https"
 import type { Hono } from "hono"
 import type { Adapter } from "./adapter"
 
@@ -11,7 +12,13 @@ export const adapter: Adapter = {
       async listen(opts) {
         const start = (port: number) =>
           new Promise<ServerType>((resolve, reject) => {
-            const server = createAdaptorServer({ fetch: app.fetch })
+            const server = opts.tls
+              ? createAdaptorServer({
+                  fetch: app.fetch,
+                  createServer: createHttpsServer,
+                  serverOptions: { cert: opts.tls.cert, key: opts.tls.key },
+                })
+              : createAdaptorServer({ fetch: app.fetch })
             ws.injectWebSocket(server)
             const fail = (err: Error) => {
               cleanup()
