@@ -25,7 +25,7 @@ to host, and nothing exposed to the public internet.
    Device:     pine-laptop
    Signed in:  alex@mycorp.com
    Open on any tailnet device:
-     http://pine-laptop.mycorp.ts.net:4096/ui/
+     http://pine-laptop.mycorp.ts.net:4096/
    ```
 
 4. Open that URL in your phone's browser. The standard opencode web UI
@@ -62,7 +62,7 @@ The phone browser will prompt for the password on first load.
 | Flag | Default | Notes |
 |---|---|---|
 | `--port <n>` | `4096` | TCP port to bind. |
-| `--hostname <ip>` | `0.0.0.0` | Bind hostname. The default lets tailnet peers connect via the device's tailnet IP. |
+| `--hostname <ip>` | this device's Tailscale IP | Bind hostname. Default keeps the server tailnet-only; pass `0.0.0.0` to also expose it on non-tailnet interfaces. |
 | `--tls` | `false` | Fetch a Tailscale-issued cert and serve HTTPS. |
 | `--cors <origin>` | `[]` | Repeatable. Allow extra origins (only relevant if you embed the UI elsewhere). |
 

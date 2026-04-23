@@ -7,7 +7,7 @@
  * Caches the most recent cert under `~/.opencode/data/tls/<host>/` so
  * repeat starts of `opencode tailscale --tls` don't have to re-issue.
  */
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, readFile, stat } from "node:fs/promises"
 import path from "node:path"
 import { Global } from "../global"
 import { runCommand, TailscaleNotInstalledError } from "./client"
@@ -74,7 +74,3 @@ async function readIfFresh(certPath: string, keyPath: string): Promise<{ cert: s
   }
 }
 
-export async function writeTestCert(dir: string, cert: string, key: string): Promise<void> {
-  await mkdir(dir, { recursive: true })
-  await Promise.all([writeFile(path.join(dir, "cert.crt"), cert), writeFile(path.join(dir, "key.key"), key)])
-}

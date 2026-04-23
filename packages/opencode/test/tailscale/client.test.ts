@@ -43,7 +43,17 @@ describe("parseStatus", () => {
     expect(status.MagicDNSSuffix).toBe("mycorp.ts.net")
   })
 
-  it("throws when the device isn't signed in (DNSName empty)", () => {
+  it("throws when the device isn't signed in (BackendState=NeedsLogin)", () => {
+    const unsigned = { ...SAMPLE_STATUS, BackendState: "NeedsLogin" }
+    expect(() => parseStatus(unsigned)).toThrow(TailscaleNotRunningError)
+  })
+
+  it("throws a different message when tailscaled is stopped", () => {
+    const stopped = { ...SAMPLE_STATUS, BackendState: "Stopped" }
+    expect(() => parseStatus(stopped)).toThrow(/stopped/)
+  })
+
+  it("throws when BackendState is Running but DNSName is missing", () => {
     const blank = { ...SAMPLE_STATUS, Self: { ...SAMPLE_STATUS.Self, DNSName: "" } }
     expect(() => parseStatus(blank)).toThrow(TailscaleNotRunningError)
   })

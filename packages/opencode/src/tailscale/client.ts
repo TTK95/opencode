@@ -139,12 +139,21 @@ export class TailscaleClient {
 export function parseStatus(raw: unknown): TailscaleStatus {
   if (!raw || typeof raw !== "object") throw new Error("invalid tailscaled status response")
   const obj = raw as any
+  const backendState = typeof obj.BackendState === "string" ? obj.BackendState : "Unknown"
+  if (backendState === "NeedsLogin" || backendState === "NoState") {
+    throw new TailscaleNotRunningError(
+      "Tailscale is installed but this device isn't signed in. Run `tailscale up`.",
+    )
+  }
+  if (backendState === "Stopped") {
+    throw new TailscaleNotRunningError("Tailscale is stopped. Run `tailscale up` to bring it online.")
+  }
   const self = obj.Self
   if (!self || typeof self !== "object") throw new Error("tailscaled status missing Self")
   const dnsName = typeof self.DNSName === "string" ? self.DNSName : ""
   if (!dnsName) {
     throw new TailscaleNotRunningError(
-      "Tailscale is installed but this device hasn't been signed in. Run `tailscale up`.",
+      "Tailscale is installed but this device has no MagicDNS name. Check `tailscale status`.",
     )
   }
   const magicSuffix =
@@ -154,7 +163,7 @@ export function parseStatus(raw: unknown): TailscaleStatus {
         dnsName.replace(/\.$/, "").split(".").slice(1).join(".")
   return {
     MagicDNSSuffix: magicSuffix,
-    BackendState: typeof obj.BackendState === "string" ? obj.BackendState : "Unknown",
+    BackendState: backendState,
     Self: {
       DNSName: dnsName,
       TailscaleIPs: Array.isArray(self.TailscaleIPs) ? self.TailscaleIPs.filter((ip: unknown) => typeof ip === "string") : [],

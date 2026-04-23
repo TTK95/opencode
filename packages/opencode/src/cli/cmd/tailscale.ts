@@ -26,8 +26,8 @@ export const TailscaleCommand = cmd({
       })
       .option("hostname", {
         type: "string",
-        describe: "hostname to bind (default 0.0.0.0 so tailnet peers can reach it)",
-        default: "0.0.0.0",
+        describe:
+          "hostname to bind (default: this device's Tailscale IP; binding to 0.0.0.0 also exposes the server on any non-tailnet interface)",
       })
       .option("tls", {
         type: "boolean",
@@ -56,6 +56,11 @@ export const TailscaleCommand = cmd({
     const email = loginEmail(status)
     const peers = onlinePeerCount(status)
 
+    // Default hostname: prefer the device's Tailscale IP so we don't
+    // accidentally bind on public interfaces. Fall back to 0.0.0.0 when
+    // no tailnet IP is reported.
+    const resolvedHostname = (args.hostname as string | undefined) ?? status.Self.TailscaleIPs[0] ?? "0.0.0.0"
+
     let tls
     if (args.tls) {
       try {
@@ -76,13 +81,15 @@ export const TailscaleCommand = cmd({
 
     const server = await Server.listen({
       port: args.port,
-      hostname: args.hostname,
+      hostname: resolvedHostname,
       cors: args.cors as string[],
       tls,
     })
 
     const scheme = tls ? "https" : "http"
-    const url = `${scheme}://${host}:${server.port}/ui/`
+    // Phones hit the MagicDNS name, not the raw IP — Tailscale resolves the
+    // name to the peer's current tailnet address automatically.
+    const url = `${scheme}://${host}:${server.port}/`
 
     UI.empty()
     UI.println(UI.logo("  "))
@@ -99,23 +106,16 @@ export const TailscaleCommand = cmd({
     UI.println(UI.Style.TEXT_DIM + "  Press Ctrl+C to stop.")
     UI.empty()
 
-    let stopping: Promise<void> | undefined
-    const shutdown = () => {
-      if (stopping) return
-      stopping = server.stop(true)
-    }
-    process.on("SIGINT", shutdown)
-    process.on("SIGTERM", shutdown)
-
     await new Promise<void>((resolve) => {
-      const interval = setInterval(() => {
-        if (stopping) {
-          clearInterval(interval)
-          resolve()
-        }
-      }, 250)
+      const shutdown = () => {
+        process.off("SIGINT", shutdown)
+        process.off("SIGTERM", shutdown)
+        resolve()
+      }
+      process.on("SIGINT", shutdown)
+      process.on("SIGTERM", shutdown)
     })
-    if (stopping) await stopping
+    await server.stop(true)
   },
 })
 
