@@ -131,7 +131,138 @@ Small TUI patches not yet upstreamed:
 
 ---
 
-## 7. Developer ergonomics
+## 7. `opencode tailscale` — drive a session from your phone
+
+Exposes the opencode web UI on your tailnet so any device signed into the same Tailscale account (phone, tablet, second laptop) can drive a session. WireGuard handles NAT traversal, Tailscale issues the TLS cert, no pairing codes, no relay to host, nothing on the public internet.
+
+### Setup
+
+1. Install Tailscale on the laptop running opencode and on your phone: <https://tailscale.com/download>. Sign both into the same tailnet.
+2. From the repo, run:
+
+   ```
+   opencode tailscale
+   ```
+
+   Prints something like:
+
+   ```
+   Tailnet:    mycorp.ts.net
+   Device:     pine-laptop
+   Open on any tailnet device:
+     http://pine-laptop.mycorp.ts.net:4096/
+   ```
+
+3. Open that URL from the phone browser — the standard opencode web UI loads.
+
+### HTTPS
+
+Some browser features (clipboard write, install-as-PWA, secure-context APIs) require HTTPS:
+
+```
+opencode tailscale --tls
+```
+
+Shells out to `tailscale cert`, caches the result under `~/.opencode/data/tls/<host>/`. May require enabling **Tailscale Admin → DNS → HTTPS Certificates** first.
+
+### Auth
+
+By default, anyone on your tailnet who knows the URL can drive the session. For shared tailnets, set a second factor:
+
+```
+OPENCODE_SERVER_PASSWORD=$(openssl rand -hex 16) opencode tailscale
+```
+
+The phone will prompt for the password on first load.
+
+### Flags
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--port <n>` | `4096` | TCP port to bind. |
+| `--hostname <ip>` | this device's Tailscale IP | Default keeps the server tailnet-only; pass `0.0.0.0` to also expose it on non-tailnet interfaces. |
+| `--tls` | `false` | Fetch a Tailscale-issued cert and serve HTTPS. |
+| `--cors <origin>` | `[]` | Repeatable. Allow extra origins. |
+
+### Where it lives
+
+- `packages/opencode/src/cli/cmd/tailscale.ts` — subcommand
+- `packages/opencode/src/tailscale/client.ts` — tailscaled API + `tailscale status --json` fallback
+- `packages/opencode/src/tailscale/cert.ts` — cert cache
+- `packages/opencode/src/server/adapter.{bun,node,ts}.ts` — optional `tls: { cert, key }` passthrough
+- `packages/opencode/TAILSCALE.md` — end-user doc
+- `packages/opencode/test/tailscale/client.test.ts`, `adapter-tls.test.ts`
+
+The earlier custom WebSocket relay (paired-code remote control) was reverted (`b56e441d5`, `ee7ecc662`) in favour of this — Tailscale gives NAT traversal, identity, valid TLS, and MagicDNS for free.
+
+**Commits.** `947037b72`, `7d5bae80c`
+
+---
+
+## 8. Docker sandbox for tool execution
+
+Opt-in Docker sandbox that runs `bash` and shell-tool actions inside an isolated container. File tools (read/edit/glob/grep) stay on the host; only shell execution is sandboxed.
+
+### Two modes
+
+- **mount** — binds `$CWD` into `/workspace` in the container. File tools still write directly to the host repo; shell commands run in the container.
+- **copy** — rsyncs the repo into `$OPENCODE_DATA/container/<id>/workspace`, mounts that into the container, and redirects `Instance.directory` so **all** tools operate on the copy. Review or apply changes back with `opencode container export <sessionID>`.
+
+### Activation
+
+CLI flag or env:
+
+```
+opencode --container mount
+opencode --container copy
+OPENCODE_CONTAINER=copy opencode
+```
+
+Custom image:
+
+```
+opencode --container mount --container-image python:3.12-slim
+OPENCODE_CONTAINER_IMAGE=... opencode
+```
+
+Default image: `node:22-alpine`.
+
+### Secure defaults
+
+- `--network=none`
+- `--cap-drop=ALL`
+- `--security-opt=no-new-privileges`
+- `--user <uid>:<gid>` (matches host user to avoid root-owned files in the workspace)
+- Memory / CPU / PID limits
+- Label-based cleanup of stale containers on next start
+
+### Subcommands
+
+- `opencode container status` — list active sandboxes
+- `opencode container prune` — remove stopped/stale ones
+- `opencode container export <sessionID>` — diff-and-apply the copy workspace back onto the host repo
+
+### Caveats
+
+- Config-file support for the `container` section is wired in the schema but the runtime is currently resolved from CLI/env only. Per-project container config before `Instance.provide` is a follow-up.
+- Env forwarding hardens against host-toolchain leakage: `ENV_SKIP` drops `PATH`, `MANPATH`, `LD_LIBRARY_PATH`, `NODE`, `NODE_PATH`, `NODE_OPTIONS`, `VIRTUAL_ENV`, `CONDA_PREFIX`, `SSH_*`, `DISPLAY`, `TERM_PROGRAM`, `XPC_*` and prefixes `NVM_`, `FNM_`, `VOLTA_`, `PYENV_`, `RBENV_`, `XDG_`, `__CF`.
+
+### Where it lives
+
+- `packages/opencode/src/container/index.ts` — `Runtime` abstraction, env forwarding, `InstanceContext` integration
+- `packages/opencode/src/container/docker.ts` — Docker wrapper
+- `packages/opencode/src/container/copy.ts` — rsync/diff/apply
+- `packages/opencode/src/cli/cmd/container.ts` — `status`/`prune`/`export`
+- `packages/opencode/src/cli/bootstrap.ts` — `--container` flag parsing and startup
+- `packages/opencode/src/tool/bash.ts`, `shell/background.ts` — `Runtime.spawnArgs()` routing when a container runtime is active
+- `packages/opencode/src/config/config.ts` — schema (runtime wire-up is follow-up)
+- `packages/opencode/test/container/copy.test.ts`
+
+**Commits.** `5e97497bb`, `7d74db9bf`
+
+---
+
+## 9. Developer ergonomics
 
 - `LOCAL_REINSTALL.md` — step-by-step for `bun run build --single` + symlinked global install, and the nested-binary gotcha (`opencode-ai/node_modules/opencode-windows-x64` can shadow the top-level symlink). Commit `b78d907f7`.
 - `.gitignore` — ignore `.claude/` (Claude Code settings + agent worktrees). Commit `ebce0140b`.
@@ -142,7 +273,7 @@ Small TUI patches not yet upstreamed:
 
 These are visible in the branch list but **not** merged into `dev`:
 
-- **Remote control tunnel** (`f6fecc3ed`, `b57b65b04`) — lives on unmerged branches only.
+- **Custom remote-control relay** (`f6fecc3ed`, `b57b65b04`, `068555096`) — reverted in favour of §7 Tailscale. The relay branch + relay package were dropped.
 - **Streaming rate-limit error fix** (`origin/fix/streaming-rate-limit-error`) — partial work folded into §2, standalone branch is a historical artefact.
 
 ---
