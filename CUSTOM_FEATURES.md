@@ -203,6 +203,21 @@ The earlier custom WebSocket relay (paired-code remote control) was reverted (`b
 
 Opt-in Docker sandbox that runs `bash` and shell-tool actions inside an isolated container. File tools (read/edit/glob/grep) stay on the host; only shell execution is sandboxed.
 
+### Prerequisite: Docker Desktop
+
+A working `docker` on `PATH` is required. On Windows, the supported route is Docker Desktop:
+
+```powershell
+winget install --id Docker.DockerDesktop --source winget `
+  --accept-package-agreements --accept-source-agreements --silent
+```
+
+Winget will prompt for UAC elevation; the install itself is ~600 MB and takes 2–4 min. After install, launch **Docker Desktop** from the Start menu once to initialise the WSL2 backend and accept the first-run terms, then confirm with `docker --version`.
+
+Without `docker` available, opencode falls back to the host shell and logs `container runtime failed to start; continuing without sandbox` — the TUI still works, just without isolation. In that state the `--container` flag effectively becomes a no-op.
+
+Alternatives that ship a `docker`-compatible CLI (Podman with `podman-docker`, Rancher Desktop in dockerd mode) are untested against this integration — let us know if they work for you.
+
 ### Two modes
 
 - **mount** — binds `$CWD` into `/workspace` in the container. File tools still write directly to the host repo; shell commands run in the container.
