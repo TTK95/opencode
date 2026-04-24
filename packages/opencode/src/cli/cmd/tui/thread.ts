@@ -106,9 +106,21 @@ export const TuiThreadCommand = cmd({
         type: "boolean",
         default: false,
         describe: "start with all permission prompts auto-approved (YOLO mode)",
+      })
+      .option("container", {
+        type: "string",
+        choices: ["off", "mount", "copy"],
+        describe: "run tools inside a Docker sandbox ('mount' binds cwd, 'copy' uses an isolated copy)",
+      })
+      .option("container-image", {
+        type: "string",
+        describe: "Docker image used for the sandbox container (defaults to node:22-alpine)",
       }),
   handler: async (args) => {
     if (args.yolo) process.env.OPENCODE_YOLO = "true"
+    if (args.container !== undefined) process.env.OPENCODE_CONTAINER = args.container as string
+    if (args["container-image"] !== undefined)
+      process.env.OPENCODE_CONTAINER_IMAGE = args["container-image"] as string
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)
     const unguard = win32InstallCtrlCGuard()

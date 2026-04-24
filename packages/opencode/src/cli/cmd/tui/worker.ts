@@ -12,6 +12,8 @@ import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { ensureProcessMetadata } from "@/util/opencode-process"
+import { Container } from "@/container"
+import { ulid } from "ulid"
 
 ensureProcessMetadata("worker")
 
@@ -42,6 +44,47 @@ process.on("uncaughtException", (e) => {
 GlobalBus.on("event", (event) => {
   Rpc.emit("global.event", event)
 })
+
+// If the TUI was launched with --container (or OPENCODE_CONTAINER env), pre-boot
+// the Instance for the worker's cwd with a container runtime. Subsequent
+// Instance.provide calls from the in-process server hit the same directory
+// cache entry and reuse the runtime, so bash/shell tools route into Docker.
+// Copy-mode redirects the instance directory to the isolated workspace so all
+// tools (files + shell) operate on the copy.
+async function preBootContainer() {
+  const mode = Container.fromEnv()
+  if (!mode || mode === "off") return
+  const cfg = Container.merge(Container.DEFAULTS, {
+    mode,
+    ...(Flag.OPENCODE_CONTAINER_IMAGE ? { image: Flag.OPENCODE_CONTAINER_IMAGE } : {}),
+  })
+  const sessionID = ulid().toLowerCase()
+  Log.Default.info("preparing container runtime for TUI", {
+    mode: cfg.mode,
+    image: cfg.image,
+    cwd: process.cwd(),
+  })
+  try {
+    const runtime = await Container.prepare(sessionID, process.cwd(), cfg)
+    const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : process.cwd()
+    await Instance.provide({
+      directory,
+      container: runtime,
+      init: () => AppRuntime.runPromise(InstanceBootstrap),
+      fn: async () => undefined,
+    })
+    Log.Default.info("container runtime ready", {
+      mode: runtime.mode,
+      containerID: runtime.containerID,
+      directory,
+    })
+  } catch (err) {
+    Log.Default.error("container runtime failed to start; continuing without sandbox", {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+await preBootContainer()
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
