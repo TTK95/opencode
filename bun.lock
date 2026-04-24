@@ -314,7 +314,7 @@
     },
     "packages/opencode": {
       "name": "opencode",
-      "version": "1.14.22-dev_ttk",
+      "version": "1.14.22-dev",
       "bin": {
         "opencode": "./bin/opencode",
       },
@@ -459,7 +459,7 @@
     },
     "packages/plugin": {
       "name": "@opencode-ai/plugin",
-      "version": "1.14.22-dev_ttk",
+      "version": "1.14.22-dev",
       "dependencies": {
         "@opencode-ai/sdk": "workspace:*",
         "effect": "catalog:",
@@ -617,7 +617,7 @@
     },
     "packages/web": {
       "name": "@opencode-ai/web",
-      "version": "1.14.22-dev_ttk",
+      "version": "1.14.22-dev",
       "dependencies": {
         "@astrojs/cloudflare": "12.6.3",
         "@astrojs/markdown-remark": "6.3.1",

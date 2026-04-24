@@ -1,10 +1,9 @@
-import z from "zod"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import * as Tool from "./tool"
 import { BackgroundShell, ShellNotFound } from "../shell/background"
 
-const parameters = z.object({
-  shell_id: z.string().describe("The id of the background shell to terminate"),
+const parameters = Schema.Struct({
+  shell_id: Schema.String.annotate({ description: "The id of the background shell to terminate" }),
 })
 
 const DESCRIPTION = `Terminate a background shell previously started by the bash tool with \`run_in_background: true\`.
@@ -18,7 +17,7 @@ export const KillShellTool = Tool.define(
     return {
       description: DESCRIPTION,
       parameters,
-      execute: (params: z.infer<typeof parameters>, _ctx: Tool.Context) =>
+      execute: (params: Schema.Schema.Type<typeof parameters>, _ctx: Tool.Context) =>
         bg
           .kill({ shellID: params.shell_id })
           .pipe(

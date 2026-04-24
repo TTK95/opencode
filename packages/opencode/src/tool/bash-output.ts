@@ -1,10 +1,11 @@
-import z from "zod"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import * as Tool from "./tool"
 import { BackgroundShell, ShellNotFound } from "../shell/background"
 
-const parameters = z.object({
-  shell_id: z.string().describe("The id of a background shell previously started via bash with run_in_background"),
+const parameters = Schema.Struct({
+  shell_id: Schema.String.annotate({
+    description: "The id of a background shell previously started via bash with run_in_background",
+  }),
 })
 
 const DESCRIPTION = `Read new output from a background shell started by the bash tool with \`run_in_background: true\`.
@@ -20,7 +21,7 @@ export const BashOutputTool = Tool.define(
     return {
       description: DESCRIPTION,
       parameters,
-      execute: (params: z.infer<typeof parameters>, _ctx: Tool.Context) =>
+      execute: (params: Schema.Schema.Type<typeof parameters>, _ctx: Tool.Context) =>
         bg
           .output({ shellID: params.shell_id })
           .pipe(
