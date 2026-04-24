@@ -4,6 +4,7 @@ import type { UpgradeWebSocket } from "hono/ws"
 export type Opts = {
   port: number
   hostname: string
+  tls?: { cert: string; key: string }
 }
 
 export type Listener = {
