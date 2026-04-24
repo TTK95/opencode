@@ -23,6 +23,7 @@ import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { errors } from "../../error"
 import { lazy } from "@/util/lazy"
+import { zodObject } from "@/util/effect-zod"
 import { Bus } from "@/bus"
 import { NamedError } from "@opencode-ai/shared/util/error"
 import { jsonRequest, runRequest } from "./trace"
@@ -42,7 +43,7 @@ export const SessionRoutes = lazy(() =>
             description: "List of sessions",
             content: {
               "application/json": {
-                schema: resolver(Session.Info.array()),
+                schema: resolver(Session.Info.zod.array()),
               },
             },
           },
@@ -87,7 +88,7 @@ export const SessionRoutes = lazy(() =>
             description: "Get session status",
             content: {
               "application/json": {
-                schema: resolver(z.record(z.string(), SessionStatus.Info)),
+                schema: resolver(z.record(z.string(), SessionStatus.Info.zod)),
               },
             },
           },
@@ -112,7 +113,7 @@ export const SessionRoutes = lazy(() =>
             description: "Get session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -122,7 +123,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          sessionID: Session.GetInput,
+          sessionID: Session.GetInput.zod,
         }),
       ),
       async (c) => {
@@ -145,7 +146,7 @@ export const SessionRoutes = lazy(() =>
             description: "List of children",
             content: {
               "application/json": {
-                schema: resolver(Session.Info.array()),
+                schema: resolver(Session.Info.zod.array()),
               },
             },
           },
@@ -155,7 +156,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          sessionID: Session.ChildrenInput,
+          sessionID: Session.ChildrenInput.zod,
         }),
       ),
       async (c) => {
@@ -177,7 +178,7 @@ export const SessionRoutes = lazy(() =>
             description: "Todo list",
             content: {
               "application/json": {
-                schema: resolver(Todo.Info.array()),
+                schema: resolver(Todo.Info.zod.array()),
               },
             },
           },
@@ -210,13 +211,13 @@ export const SessionRoutes = lazy(() =>
             description: "Successfully created session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
         },
       }),
-      validator("json", Session.CreateInput),
+      validator("json", Session.CreateInput.zod),
       async (c) =>
         jsonRequest("SessionRoutes.create", c, function* () {
           const body = c.req.valid("json") ?? {}
@@ -245,7 +246,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          sessionID: Session.RemoveInput,
+          sessionID: Session.RemoveInput.zod,
         }),
       ),
       async (c) =>
@@ -267,7 +268,7 @@ export const SessionRoutes = lazy(() =>
             description: "Successfully updated session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -380,7 +381,7 @@ export const SessionRoutes = lazy(() =>
             description: "200",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -389,14 +390,14 @@ export const SessionRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          sessionID: Session.ForkInput.shape.sessionID,
+          sessionID: SessionID.zod,
         }),
       ),
-      validator("json", Session.ForkInput.omit({ sessionID: true })),
+      validator("json", zodObject(Session.ForkInput).omit({ sessionID: true })),
       async (c) =>
         jsonRequest("SessionRoutes.fork", c, function* () {
           const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
+          const body = c.req.valid("json") as { messageID?: MessageID }
           const svc = yield* Session.Service
           return yield* svc.fork({ ...body, sessionID })
         }),
@@ -443,7 +444,7 @@ export const SessionRoutes = lazy(() =>
             description: "Successfully shared session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -485,18 +486,13 @@ export const SessionRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          sessionID: SessionSummary.DiffInput.shape.sessionID,
+          sessionID: SessionID.zod,
         }),
       ),
-      validator(
-        "query",
-        z.object({
-          messageID: SessionSummary.DiffInput.shape.messageID,
-        }),
-      ),
+      validator("query", zodObject(SessionSummary.DiffInput).omit({ sessionID: true })),
       async (c) =>
         jsonRequest("SessionRoutes.diff", c, function* () {
-          const query = c.req.valid("query")
+          const query = c.req.valid("query") as Omit<SessionSummary.DiffInput, "sessionID">
           const params = c.req.valid("param")
           const summary = yield* SessionSummary.Service
           return yield* summary.diff({
@@ -516,7 +512,7 @@ export const SessionRoutes = lazy(() =>
             description: "Successfully unshared session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -877,7 +873,7 @@ export const SessionRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
-      validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
+      validator("json", zodObject(SessionPrompt.PromptInput).omit({ sessionID: true })),
       async (c) => {
         c.status(200)
         c.header("Content-Type", "application/json")
@@ -915,7 +911,7 @@ export const SessionRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
-      validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
+      validator("json", zodObject(SessionPrompt.PromptInput).omit({ sessionID: true })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
@@ -965,11 +961,11 @@ export const SessionRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
-      validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
+      validator("json", zodObject(SessionPrompt.CommandInput).omit({ sessionID: true })),
       async (c) =>
         jsonRequest("SessionRoutes.command", c, function* () {
           const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
+          const body = c.req.valid("json") as Omit<SessionPrompt.CommandInput, "sessionID">
           const svc = yield* SessionPrompt.Service
           return yield* svc.command({ ...body, sessionID })
         }),
@@ -998,11 +994,11 @@ export const SessionRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
-      validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
+      validator("json", zodObject(SessionPrompt.ShellInput).omit({ sessionID: true })),
       async (c) =>
         jsonRequest("SessionRoutes.shell", c, function* () {
           const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
+          const body = c.req.valid("json") as Omit<SessionPrompt.ShellInput, "sessionID">
           const svc = yield* SessionPrompt.Service
           return yield* svc.shell({ ...body, sessionID })
         }),
@@ -1018,7 +1014,7 @@ export const SessionRoutes = lazy(() =>
             description: "Updated session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
@@ -1031,16 +1027,14 @@ export const SessionRoutes = lazy(() =>
           sessionID: SessionID.zod,
         }),
       ),
-      validator("json", SessionRevert.RevertInput.omit({ sessionID: true })),
+      validator("json", zodObject(SessionRevert.RevertInput).omit({ sessionID: true })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        log.info("revert", c.req.valid("json"))
+        const body = c.req.valid("json") as Omit<SessionRevert.RevertInput, "sessionID">
+        log.info("revert", body)
         return jsonRequest("SessionRoutes.revert", c, function* () {
           const svc = yield* SessionRevert.Service
-          return yield* svc.revert({
-            sessionID,
-            ...c.req.valid("json"),
-          })
+          return yield* svc.revert({ sessionID, ...body })
         })
       },
     )
@@ -1055,7 +1049,7 @@ export const SessionRoutes = lazy(() =>
             description: "Updated session",
             content: {
               "application/json": {
-                schema: resolver(Session.Info),
+                schema: resolver(Session.Info.zod),
               },
             },
           },
