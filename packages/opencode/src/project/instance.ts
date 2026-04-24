@@ -7,11 +7,13 @@ import { Log } from "@/util"
 import { LocalContext } from "../util"
 import * as Project from "./project"
 import { WorkspaceContext } from "@/control-plane/workspace-context"
+import { Container } from "../container"
 
 export interface InstanceContext {
   directory: string
   worktree: string
   project: Project.Info
+  container?: Container.Runtime
 }
 
 const context = LocalContext.create<InstanceContext>("instance")
@@ -22,14 +24,21 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
-function boot(input: { directory: string; init?: () => Promise<any>; worktree?: string; project?: Project.Info }) {
+function boot(input: {
+  directory: string
+  init?: () => Promise<any>
+  worktree?: string
+  project?: Project.Info
+  container?: Container.Runtime
+}) {
   return iife(async () => {
-    const ctx =
+    const ctx: InstanceContext =
       input.project && input.worktree
         ? {
             directory: input.directory,
             worktree: input.worktree,
             project: input.project,
+            container: input.container,
           }
         : await project
             .runPromise((svc) => svc.fromDirectory(input.directory))
@@ -37,6 +46,7 @@ function boot(input: { directory: string; init?: () => Promise<any>; worktree?: 
               directory: input.directory,
               worktree: sandbox,
               project,
+              container: input.container,
             }))
     await context.provide(ctx, async () => {
       await input.init?.()
@@ -55,7 +65,12 @@ function track(directory: string, next: Promise<InstanceContext>) {
 }
 
 export const Instance = {
-  async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
+  async provide<R>(input: {
+    directory: string
+    init?: () => Promise<any>
+    fn: () => R
+    container?: Container.Runtime
+  }): Promise<R> {
     const directory = AppFileSystem.resolve(input.directory)
     let existing = cache.get(directory)
     if (!existing) {
@@ -65,6 +80,7 @@ export const Instance = {
         boot({
           directory,
           init: input.init,
+          container: input.container,
         }),
       )
     }
@@ -84,6 +100,9 @@ export const Instance = {
   },
   get project() {
     return context.use().project
+  },
+  get container() {
+    return context.use().container
   },
 
   /**
@@ -140,9 +159,17 @@ export const Instance = {
   async dispose() {
     const directory = Instance.directory
     const project = Instance.project
+    const container = Instance.container
     Log.Default.info("disposing instance", { directory })
     await disposeInstance(directory)
     cache.delete(directory)
+    if (container) {
+      try {
+        await container.destroy()
+      } catch (err) {
+        Log.Default.warn("container destroy failed", { error: String(err) })
+      }
+    }
 
     GlobalBus.emit("event", {
       directory,

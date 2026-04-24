@@ -263,6 +263,38 @@ export const Info = Schema.Struct({
       }),
     }),
   ),
+  container: Schema.optional(
+    Schema.Struct({
+      mode: Schema.optional(Schema.Literals(["off", "mount", "copy"])).annotate({
+        description:
+          "Execution sandbox mode. 'off' runs tools on the host (default). 'mount' binds the working directory into a Docker container. 'copy' runs against an isolated copy of the working directory.",
+      }),
+      image: Schema.optional(Schema.String).annotate({
+        description: "Docker image used for the sandbox container. Defaults to node:22-alpine.",
+      }),
+      network: Schema.optional(Schema.Literals(["none", "bridge", "host"])).annotate({
+        description: "Container network mode. Defaults to 'none' for stronger isolation.",
+      }),
+      memory: Schema.optional(Schema.String).annotate({
+        description: "Memory limit for the container, passed to docker --memory. Example: '2g'.",
+      }),
+      cpus: Schema.optional(Schema.String).annotate({
+        description: "CPU limit for the container, passed to docker --cpus. Example: '2'.",
+      }),
+      pids: Schema.optional(PositiveInt).annotate({
+        description: "PID limit inside the container.",
+      }),
+      run_as_current_user: Schema.optional(Schema.Boolean).annotate({
+        description: "Run the container as the host uid/gid so created files are owned by the user.",
+      }),
+      exclude: Schema.optional(Schema.mutable(Schema.Array(Schema.String))).annotate({
+        description: "Patterns to exclude when syncing the working directory in copy mode.",
+      }),
+    }),
+  ).annotate({
+    description:
+      "Run tool/shell actions inside a Docker sandbox. Opt-in per session via --container or OPENCODE_CONTAINER.",
+  }),
 })
   .annotate({ identifier: "Config" })
   .pipe(

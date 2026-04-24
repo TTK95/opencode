@@ -299,6 +299,15 @@ export const RunCommand = cmd({
         describe: "auto-approve permissions that are not explicitly denied (dangerous!)",
         default: false,
       })
+      .option("container", {
+        type: "string",
+        choices: ["off", "mount", "copy"],
+        describe: "run tools inside a Docker sandbox ('mount' binds cwd, 'copy' uses an isolated copy)",
+      })
+      .option("container-image", {
+        type: "string",
+        describe: "Docker image used for the sandbox container (defaults to node:22-alpine)",
+      })
   },
   handler: async (args) => {
     let message = [...args.message, ...(args["--"] || [])]
@@ -669,13 +678,21 @@ export const RunCommand = cmd({
       return await execute(sdk)
     }
 
-    await bootstrap(process.cwd(), async () => {
-      const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = new Request(input, init)
-        return Server.Default().app.fetch(request)
-      }) as typeof globalThis.fetch
-      const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
-      await execute(sdk)
-    })
+    const containerOverride: { mode?: "off" | "mount" | "copy"; image?: string } = {}
+    if (args.container !== undefined) containerOverride.mode = args.container as "off" | "mount" | "copy"
+    if (args["container-image"] !== undefined) containerOverride.image = args["container-image"] as string
+
+    await bootstrap(
+      process.cwd(),
+      async () => {
+        const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const request = new Request(input, init)
+          return Server.Default().app.fetch(request)
+        }) as typeof globalThis.fetch
+        const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
+        await execute(sdk)
+      },
+      { container: containerOverride },
+    )
   },
 })
