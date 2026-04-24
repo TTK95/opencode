@@ -13,6 +13,7 @@ import { AppFileSystem } from "@opencode-ai/shared/filesystem"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag"
 import { Shell } from "@/shell/shell"
+import { Container } from "@/container"
 
 import { BashArity } from "@/permission/arity"
 import * as Truncate from "./truncate"
@@ -283,6 +284,12 @@ const ask = Effect.fn("BashTool.ask")(function* (ctx: Tool.Context, scan: Scan) 
 })
 
 function cmd(shell: string, name: string, command: string, cwd: string, env: NodeJS.ProcessEnv) {
+  const runtime = Instance.current.container
+  if (runtime && runtime.mode !== "off") {
+    const args = runtime.spawnArgs(shell, name, command, cwd, env)
+    return Container.toChildProcessCommand(args)
+  }
+
   if (process.platform === "win32" && PS.has(name)) {
     return ChildProcess.make(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], {
       cwd,

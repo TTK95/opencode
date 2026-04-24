@@ -108,11 +108,12 @@ export async function listen(opts: {
   mdns?: boolean
   mdnsDomain?: string
   cors?: string[]
+  tls?: { cert: string; key: string }
 }): Promise<Listener> {
   const built = create(opts)
   const server = await built.runtime.listen(opts)
 
-  const next = new URL("http://localhost")
+  const next = new URL(opts.tls ? "https://localhost" : "http://localhost")
   next.hostname = opts.hostname
   next.port = String(server.port)
   url = next

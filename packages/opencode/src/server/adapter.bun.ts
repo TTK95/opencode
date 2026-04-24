@@ -13,6 +13,7 @@ export const adapter: Adapter = {
           hostname: opts.hostname,
           idleTimeout: 0,
           websocket: ws.websocket,
+          ...(opts.tls ? { tls: { cert: opts.tls.cert, key: opts.tls.key } } : {}),
         } as const
         const start = (port: number) => {
           try {

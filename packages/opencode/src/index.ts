@@ -15,6 +15,7 @@ import { InstallationVersion } from "./installation/version"
 import { NamedError } from "@opencode-ai/shared/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
+import { TailscaleCommand } from "./cli/cmd/tailscale"
 import { Filesystem } from "./util"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
@@ -30,6 +31,7 @@ import { WebCommand } from "./cli/cmd/web"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
+import { ContainerCommand } from "./cli/cmd/container"
 import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage"
@@ -168,6 +170,7 @@ const cli = yargs(args)
   .command(UninstallCommand)
   .command(ServeCommand)
   .command(WebCommand)
+  .command(TailscaleCommand)
   .command(ModelsCommand)
   .command(StatsCommand)
   .command(ExportCommand)
@@ -177,6 +180,7 @@ const cli = yargs(args)
   .command(SessionCommand)
   .command(PluginCommand)
   .command(DbCommand)
+  .command(ContainerCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
