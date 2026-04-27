@@ -1103,22 +1103,24 @@ export function fromError(
       ).toObject()
     case OutputLengthError.isInstance(e):
       return e
-    case RateLimitError.isInstance(e):
+    case RateLimitError.isInstance(e): {
+      const err = e as InstanceType<typeof RateLimitError>
       return new APIError(
         {
-          message: e.data.message,
+          message: err.data.message,
           statusCode: 429,
           isRetryable: true,
           metadata: {
-            providerID: e.data.providerID,
-            reason: e.data.reason,
-            limit: String(e.data.limit),
-            current: String(e.data.current),
-            resetAt: String(e.data.resetAt),
+            providerID: err.data.providerID,
+            reason: err.data.reason,
+            limit: String(err.data.limit),
+            current: String(err.data.current),
+            resetAt: String(err.data.resetAt),
           },
         },
-        { cause: e },
+        { cause: err },
       ).toObject()
+    }
     case LoadAPIKeyError.isInstance(e):
       return new AuthError(
         {

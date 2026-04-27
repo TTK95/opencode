@@ -3,7 +3,7 @@ import fs from "fs/promises"
 import { ChildProcess } from "effect/unstable/process"
 import type { SpawnOptions } from "child_process"
 
-import { Global } from "../global"
+import { Global } from "@opencode-ai/core/global"
 import { Log } from "../util"
 import * as DockerNs from "./docker"
 import * as CopyNs from "./copy"

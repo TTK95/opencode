@@ -9,7 +9,7 @@ import { SessionTable } from "../../session/session.sql"
 import { Project } from "../../project"
 import { Instance } from "../../project/instance"
 import { AppRuntime } from "@/effect/app-runtime"
-import { Global } from "../../global"
+import { Global } from "@opencode-ai/core/global"
 
 interface SessionStats {
   totalSessions: number

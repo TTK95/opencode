@@ -9,7 +9,7 @@
  */
 import { mkdir, readFile, stat } from "node:fs/promises"
 import path from "node:path"
-import { Global } from "../global"
+import { Global } from "@opencode-ai/core/global"
 import { runCommand, TailscaleNotInstalledError } from "./client"
 
 export type TailscaleCert = {

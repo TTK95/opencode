@@ -4,7 +4,7 @@ import { AppRuntime } from "@/effect/app-runtime"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
 import { Container } from "../container"
-import { Flag } from "../flag/flag"
+import { Flag } from "@opencode-ai/core/flag/flag"
 import { Log } from "../util"
 import { UI } from "./ui"
 

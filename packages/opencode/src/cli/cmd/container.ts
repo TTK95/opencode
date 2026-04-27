@@ -3,7 +3,7 @@ import path from "path"
 
 import { cmd } from "./cmd"
 import { UI } from "../ui"
-import { Global } from "../../global"
+import { Global } from "@opencode-ai/core/global"
 import { Container } from "../../container"
 
 const BASE = path.join(Global.Path.data, "container")

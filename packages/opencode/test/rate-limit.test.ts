@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, afterAll } from "bun:test"
 import fs from "fs"
 import path from "path"
-import { Global } from "../src/global"
+import { Global } from "@opencode-ai/core/global"
 import { RateLimit } from "../src/provider/rate-limit"
 import { ProviderID } from "../src/provider/schema"
 
