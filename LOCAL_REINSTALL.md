@@ -8,7 +8,7 @@ The global `opencode` command is installed via a symlinked local build:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.26-dev_ttk bun run build --single
+OPENCODE_VERSION=1.14.28-dev_ttk bun run build --single
 npm install -g packages/opencode/dist/opencode-windows-x64
 ```
 
@@ -20,7 +20,7 @@ After editing source:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.26-dev_ttk bun run build --single
+OPENCODE_VERSION=1.14.28-dev_ttk bun run build --single
 ```
 
 Close any running opencode TUI sessions and launch a fresh one. The symlink points at `dist/`, so the new binary is picked up automatically.

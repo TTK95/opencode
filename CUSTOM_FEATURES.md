@@ -1,6 +1,6 @@
 # Custom Features — TTK fork of opencode
 
-Everything this fork carries on top of `anomalyco/opencode@upstream/dev`. Current base: **v1.14.26** → fork tag `1.14.26-dev_ttk`.
+Everything this fork carries on top of `anomalyco/opencode@upstream/dev`. Current base: **v1.14.28** → fork tag `1.14.28-dev_ttk`.
 
 Each section lists: what it does, how to use it, and the commits / source files that implement it (so future merges know what to preserve).
 
@@ -299,7 +299,7 @@ See `LOCAL_REINSTALL.md`. TL;DR:
 
 ```bash
 cd C:/Users/tte/Projects/opencode/packages/opencode
-OPENCODE_VERSION=1.14.26-dev_ttk bun run build --single
+OPENCODE_VERSION=1.14.28-dev_ttk bun run build --single
 ```
 
 The `npm install -g packages/opencode/dist/opencode-windows-x64` from the first-time setup is symlinked, so subsequent builds are picked up automatically — just close any running TUI sessions first (Windows holds a lock on the running `opencode.exe`).
