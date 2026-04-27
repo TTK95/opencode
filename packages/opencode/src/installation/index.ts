@@ -4,6 +4,8 @@ import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import path from "path"
+import fs from "node:fs/promises"
+import os from "node:os"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { Flag } from "@opencode-ai/core/flag/flag"
@@ -15,7 +17,24 @@ import { NpmConfig } from "@opencode-ai/core/npm-config"
 
 const log = Log.create({ service: "installation" })
 
-export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
+export type Method =
+  | "curl"
+  | "npm"
+  | "yarn"
+  | "pnpm"
+  | "bun"
+  | "brew"
+  | "scoop"
+  | "choco"
+  | "github-release"
+  | "unknown"
+
+// Repo to query for releases / install script. Default targets upstream;
+// fork builds (channel `dev_ttk`) override this at build time so `opencode
+// upgrade` pulls from the fork's GitHub releases instead.
+const RELEASE_REPO = process.env["OPENCODE_REPO"] || "anomalyco/opencode"
+
+const FORK_CHANNEL = "dev_ttk"
 
 export type ReleaseType = "patch" | "minor" | "major"
 
@@ -70,7 +89,16 @@ export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedErr
 }) {}
 
 // Response schemas for external version APIs
+const GitHubReleaseAsset = Schema.Struct({
+  name: Schema.String,
+  browser_download_url: Schema.String,
+})
+type GitHubReleaseAsset = Schema.Schema.Type<typeof GitHubReleaseAsset>
 const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
+const GitHubReleaseWithAssets = Schema.Struct({
+  tag_name: Schema.String,
+  assets: Schema.Array(GitHubReleaseAsset),
+})
 const NpmPackage = Schema.Struct({ version: Schema.String })
 const BrewFormula = Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })
 const BrewInfoV2 = Schema.Struct({
@@ -141,6 +169,77 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
         return "opencode"
       })
 
+      const upgradeGithubRelease = Effect.fnUntraced(
+        function* (target: string) {
+          const platform = process.platform === "win32" ? "windows" : process.platform
+          const arch = process.arch === "x64" ? "x64" : process.arch
+          const assetName = `opencode-${platform}-${arch}.zip`
+
+          const release = yield* httpOk.execute(
+            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPO}/releases/tags/v${target}`).pipe(
+              HttpClientRequest.acceptJson,
+            ),
+          )
+          const releaseData = yield* HttpClientResponse.schemaBodyJson(GitHubReleaseWithAssets)(release)
+          const asset: GitHubReleaseAsset | undefined = releaseData.assets.find(
+            (a: GitHubReleaseAsset) => a.name === assetName,
+          )
+          if (!asset) {
+            return {
+              code: ChildProcessSpawner.ExitCode(1),
+              stdout: "",
+              stderr: `Asset ${assetName} not found in ${RELEASE_REPO} release v${target}`,
+            }
+          }
+
+          const zipResponse = yield* httpOk.execute(HttpClientRequest.get(asset.browser_download_url))
+          const tmpDir = yield* Effect.tryPromise({
+            try: () => fs.mkdtemp(path.join(os.tmpdir(), "opencode-upgrade-")),
+            catch: (e) => new UpgradeFailedError({ stderr: String(e) }),
+          })
+          const zipPath = path.join(tmpDir, assetName)
+
+          const zipBytes = yield* zipResponse.arrayBuffer
+          yield* Effect.tryPromise({
+            try: () => fs.writeFile(zipPath, Buffer.from(zipBytes)),
+            catch: (e) => new UpgradeFailedError({ stderr: String(e) }),
+          })
+
+          // installRoot is the directory that contains `bin/`. process.execPath
+          // points at <installRoot>/bin/opencode(.exe), so two `dirname`s up.
+          const installRoot = path.dirname(path.dirname(process.execPath))
+
+          // Use platform-native unzip into the install root. The running
+          // .exe on Windows is locked — surface that as a clear error so the
+          // user knows to exit other TUI sessions first.
+          const cmdArgs =
+            process.platform === "win32"
+              ? [
+                  "powershell",
+                  "-NoLogo",
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${installRoot}' -Force`,
+                ]
+              : ["unzip", "-o", zipPath, "-d", installRoot]
+
+          const result = yield* run(cmdArgs)
+          yield* Effect.tryPromise(() => fs.rm(tmpDir, { recursive: true, force: true })).pipe(Effect.ignore)
+
+          if (result.code !== 0) {
+            const hint =
+              process.platform === "win32" && /denied|in use|busy/i.test(result.stderr)
+                ? " (the running opencode.exe may be locking the file — close other TUI sessions and retry)"
+                : ""
+            return { code: result.code, stdout: result.stdout, stderr: result.stderr + hint }
+          }
+          return result
+        },
+        Effect.scoped,
+        Effect.orDie,
+      )
+
       const upgradeCurl = Effect.fnUntraced(
         function* (target: string) {
           const response = yield* httpOk.execute(HttpClientRequest.get("https://opencode.ai/install"))
@@ -171,6 +270,9 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           }
         }),
         method: Effect.fn("Installation.method")(function* () {
+          // Fork builds publish a single GitHub release with a platform zip
+          // — bypass package-manager detection and route upgrade through it.
+          if (InstallationChannel === FORK_CHANNEL) return "github-release" as Method
           if (process.execPath.includes(path.join(".opencode", "bin"))) return "curl" as Method
           if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
           const exec = process.execPath.toLowerCase()
@@ -254,7 +356,7 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           }
 
           const response = yield* httpOk.execute(
-            HttpClientRequest.get("https://api.github.com/repos/anomalyco/opencode/releases/latest").pipe(
+            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`).pipe(
               HttpClientRequest.acceptJson,
             ),
           )
@@ -266,6 +368,9 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           switch (m) {
             case "curl":
               upgradeResult = yield* upgradeCurl(target)
+              break
+            case "github-release":
+              upgradeResult = yield* upgradeGithubRelease(target)
               break
             case "npm":
               upgradeResult = yield* run(["npm", "install", "-g", `opencode-ai@${target}`])

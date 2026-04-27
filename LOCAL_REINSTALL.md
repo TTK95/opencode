@@ -8,7 +8,7 @@ The global `opencode` command is installed via a symlinked local build:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.28-dev_ttk bun run build --single
+OPENCODE_VERSION=1.14.28-dev_ttk OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
 npm install -g packages/opencode/dist/opencode-windows-x64
 ```
 
@@ -20,7 +20,7 @@ After editing source:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.28-dev_ttk bun run build --single
+OPENCODE_VERSION=1.14.28-dev_ttk OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
 ```
 
 Close any running opencode TUI sessions and launch a fresh one. The symlink points at `dist/`, so the new binary is picked up automatically.
@@ -57,3 +57,9 @@ OPENCODE_BIN_PATH=C:\Users\tte\Projects\opencode\packages\opencode\dist\opencode
 ```
 
 Bypasses the `findBinary` walk entirely. Unset it if you ever want to test the real resolution path.
+
+## Why `OPENCODE_CHANNEL=dev_ttk` and `OPENCODE_REPO=TTK95/opencode`
+
+Stamping `OPENCODE_CHANNEL=dev_ttk` at build time tells the in-app upgrade flow (`opencode upgrade`, the TUI "update available" toast) to route through the fork-specific `github-release` install method instead of npm/`opencode-ai`. `OPENCODE_REPO` overrides the hardcoded upstream repo so `Installation.latest()` queries `https://api.github.com/repos/TTK95/opencode/releases/latest`. Both default to upstream values (`local` channel + `anomalyco/opencode`) when unset, so existing builds are unaffected.
+
+The release pipeline (`.github/workflows/release-fork.yml`) sets these automatically when publishing.

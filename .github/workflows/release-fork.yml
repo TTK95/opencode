@@ -1,0 +1,111 @@
+name: Release Fork Build
+
+# Builds a fork-channel opencode binary on every push to dev (when the
+# version in packages/opencode/package.json doesn't already have a
+# matching v<version> release) and publishes it as a GitHub release with
+# the windows-x64 zip attached. The in-app `opencode upgrade` flow on
+# fork builds (channel `dev_ttk`) pulls from these releases.
+#
+# Single-platform (windows-x64) on purpose — the user's only target.
+# Adding macOS/Linux later is a runs-on matrix expansion.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "packages/opencode/package.json"
+      - "packages/opencode/**"
+      - "packages/core/**"
+      - "packages/plugin/**"
+      - "packages/script/**"
+      - "bun.lock"
+      - ".github/workflows/release-fork.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      tag: ${{ steps.read.outputs.tag }}
+      should_release: ${{ steps.read.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version + check existing tag
+        id: read
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          VERSION=$(jq -r .version packages/opencode/package.json)
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Release ${TAG} already exists — skipping."
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build windows-x64 (fork channel)
+        shell: bash
+        env:
+          OPENCODE_VERSION: ${{ needs.check-version.outputs.version }}
+          OPENCODE_CHANNEL: dev_ttk
+          OPENCODE_REPO: ${{ github.repository }}
+        run: bun run --cwd packages/opencode build --single
+
+      - name: Smoke test binary
+        shell: pwsh
+        run: |
+          $exe = "packages/opencode/dist/opencode-windows-x64/bin/opencode.exe"
+          if (-not (Test-Path $exe)) { throw "Binary not produced at $exe" }
+          $version = & $exe --version
+          Write-Host "Built $version"
+          if ($version -notmatch "${{ needs.check-version.outputs.version }}") {
+            throw "Version mismatch: expected ${{ needs.check-version.outputs.version }}, got $version"
+          }
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "packages/opencode/dist/opencode-windows-x64/bin/*" `
+            -DestinationPath "opencode-windows-x64.zip" `
+            -Force
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.check-version.outputs.tag }}" \
+            "opencode-windows-x64.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "opencode ${{ needs.check-version.outputs.version }} (fork)" \
+            --notes "Auto-published fork build of opencode ${{ needs.check-version.outputs.version }}.
+
+          \`opencode upgrade\` on fork installs (channel \`dev_ttk\`) will pull this release automatically.
+
+          - Platform: \`windows-x64\`
+          - Channel: \`dev_ttk\`
+          - Built from: ${{ github.sha }}"
