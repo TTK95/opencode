@@ -84,13 +84,34 @@ jobs:
         run: |
           echo "Fork is up to date with upstream/${UPSTREAM_REF} — nothing to do."
 
-      - name: Create or reuse sync branch
+      - name: Refuse to clobber in-progress sync branch
+        id: branch_guard
         if: steps.versions.outputs.already_synced == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # If the sync branch already exists on the remote with an open
+        # PR, a human is likely mid-resolution on it. `checkout -B`
+        # below would reset to dev and the later force-push would drop
+        # those commits. Bail out instead and ask the human to merge or
+        # close the existing PR first.
+        run: |
+          BRANCH="${{ steps.versions.outputs.branch }}"
+          if git ls-remote --exit-code --heads origin "${BRANCH}" > /dev/null 2>&1; then
+            if gh pr view "${BRANCH}" --json state --jq '.state' 2>/dev/null | grep -qx OPEN; then
+              echo "::warning::Sync branch ${BRANCH} already has an open PR — skipping. Merge or close it first, then re-run."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create sync branch from dev
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true'
         run: git checkout -B "${{ steps.versions.outputs.branch }}"
 
       - name: Attempt merge + auto-resolve known conflicts
         id: merge
-        if: steps.versions.outputs.already_synced == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true'
         run: |
           set +e
           git merge --no-edit --no-ff "upstream/${UPSTREAM_REF}"
@@ -136,7 +157,7 @@ jobs:
           fi
 
       - name: Update doc version refs
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'false'
         run: |
           NEW_VERSION="${{ steps.versions.outputs.new }}"
           UPSTREAM_VERSION="${{ steps.versions.outputs.upstream }}"
@@ -151,7 +172,7 @@ jobs:
           done
 
       - name: Commit clean merge
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'false'
         # `git merge --no-ff` creates the merge commit immediately when
         # there are no conflicts (.git/MERGE_HEAD is gone). When there
         # *were* conflicts and the auto-resolve loop staged fixes, the
@@ -168,24 +189,24 @@ jobs:
           fi
 
       - name: Commit WIP for manual resolution
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'true'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'true'
         run: |
           # Stage everything that *was* auto-resolved + leave conflict markers in unresolved files.
           git add -A
           git commit -m "WIP(sync): upstream v${{ steps.versions.outputs.upstream }} — manual conflict resolution required" --no-edit || true
 
       - name: Typecheck
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'false'
         id: typecheck
         continue-on-error: true
         run: bun run --cwd packages/opencode typecheck
 
       - name: Push branch
-        if: steps.versions.outputs.already_synced == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true'
         run: git push origin HEAD --force-with-lease
 
       - name: Open PR (clean merge)
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -228,7 +249,7 @@ jobs:
           fi
 
       - name: Open draft PR (manual resolve required)
-        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'true'
+        if: steps.versions.outputs.already_synced == 'false' && steps.branch_guard.outputs.skip != 'true' && steps.merge.outputs.manual_required == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
