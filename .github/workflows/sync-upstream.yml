@@ -1,0 +1,237 @@
+name: Sync Upstream
+
+# Auto-merges anomalyco/opencode@dev into this fork's dev branch and opens a
+# PR. Auto-resolves the conflicts that have always been mechanical so far
+# (version files, bun.lock); for anything else it opens a draft PR with the
+# in-progress merge state so the resolution can happen locally.
+#
+# Runs weekly and on manual dispatch. Never pushes directly to dev — the PR
+# requires human approval.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream ref to merge (default: dev)"
+        required: false
+        default: "dev"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: anomalyco/opencode
+      UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'dev' }}
+      FORK_SUFFIX: -dev_ttk
+      BASE_BRANCH: dev
+    steps:
+      - name: Checkout fork dev
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_REF}"
+
+      - name: Read versions
+        id: versions
+        run: |
+          set -e
+          UPSTREAM_VERSION=$(git show upstream/${UPSTREAM_REF}:packages/opencode/package.json | jq -r .version)
+          FORK_VERSION=$(jq -r .version packages/opencode/package.json)
+          NEW_VERSION="${UPSTREAM_VERSION}${FORK_SUFFIX}"
+          BRANCH="auto-sync/upstream-v${UPSTREAM_VERSION}"
+          echo "upstream=${UPSTREAM_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "fork=${FORK_VERSION}"         >> "$GITHUB_OUTPUT"
+          echo "new=${NEW_VERSION}"           >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}"             >> "$GITHUB_OUTPUT"
+          if [ "${FORK_VERSION}" = "${NEW_VERSION}" ]; then
+            echo "already_synced=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_synced=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bail if already synced
+        if: steps.versions.outputs.already_synced == 'true'
+        run: |
+          echo "Fork already at ${{ steps.versions.outputs.new }} — nothing to do."
+
+      - name: Create or reuse sync branch
+        if: steps.versions.outputs.already_synced == 'false'
+        run: git checkout -B "${{ steps.versions.outputs.branch }}"
+
+      - name: Attempt merge + auto-resolve known conflicts
+        id: merge
+        if: steps.versions.outputs.already_synced == 'false'
+        run: |
+          set +e
+          git merge --no-edit --no-ff "upstream/${UPSTREAM_REF}"
+          MERGE_RC=$?
+          set -e
+
+          # Files we know how to auto-resolve. Anything else conflicting is
+          # forwarded to a human for manual resolution.
+          AUTO_RESOLVABLE="bun.lock packages/opencode/package.json packages/plugin/package.json packages/web/package.json"
+
+          # Auto-resolve version files: take upstream's version, append our suffix.
+          NEW_VERSION="${{ steps.versions.outputs.new }}"
+          for FILE in packages/opencode/package.json packages/plugin/package.json packages/web/package.json; do
+            if git ls-files -u -- "$FILE" | grep -q .; then
+              git checkout --theirs -- "$FILE"
+              sed -i -E "s/\"version\": \"[0-9]+\.[0-9]+\.[0-9]+\"/\"version\": \"${NEW_VERSION}\"/" "$FILE"
+              git add -- "$FILE"
+              echo "auto-resolved: $FILE"
+            fi
+          done
+
+          # Auto-resolve bun.lock: take upstream then reinstall to fold in fork-only deps.
+          if git ls-files -u -- bun.lock | grep -q .; then
+            git checkout --theirs -- bun.lock
+            bun install --no-summary
+            git add bun.lock
+            echo "auto-resolved: bun.lock"
+          fi
+
+          # Anything still unresolved?
+          REMAINING=$(git diff --name-only --diff-filter=U)
+          if [ -n "$REMAINING" ]; then
+            echo "manual_required=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "remaining_files<<EOF"
+              echo "$REMAINING"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "::warning::Manual resolution needed for:"
+            echo "$REMAINING"
+          else
+            echo "manual_required=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update doc version refs
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        run: |
+          NEW_VERSION="${{ steps.versions.outputs.new }}"
+          UPSTREAM_VERSION="${{ steps.versions.outputs.upstream }}"
+          for FILE in LOCAL_REINSTALL.md CUSTOM_FEATURES.md; do
+            if [ -f "$FILE" ]; then
+              # Bump fork-suffixed versions.
+              sed -i -E "s/[0-9]+\.[0-9]+\.[0-9]+${FORK_SUFFIX}/${NEW_VERSION}/g" "$FILE"
+              # Bump bare upstream version mentions in CUSTOM_FEATURES.md (e.g. **v1.14.27**).
+              sed -i -E "s/(\*\*v)[0-9]+\.[0-9]+\.[0-9]+(\*\*)/\1${UPSTREAM_VERSION}\2/g" "$FILE"
+              git add "$FILE"
+            fi
+          done
+
+      - name: Commit clean merge
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        run: git commit --no-edit
+
+      - name: Commit WIP for manual resolution
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'true'
+        run: |
+          # Stage everything that *was* auto-resolved + leave conflict markers in unresolved files.
+          git add -A
+          git commit -m "WIP(sync): upstream v${{ steps.versions.outputs.upstream }} — manual conflict resolution required" --no-edit || true
+
+      - name: Typecheck
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        id: typecheck
+        continue-on-error: true
+        run: bun run --cwd packages/opencode typecheck
+
+      - name: Push branch
+        if: steps.versions.outputs.already_synced == 'false'
+        run: git push origin HEAD --force-with-lease
+
+      - name: Open PR (clean merge)
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.versions.outputs.branch }}"
+          TC_STATUS="${{ steps.typecheck.outcome }}"
+
+          BODY=$(cat <<EOF
+          Auto-sync of upstream **v${{ steps.versions.outputs.upstream }}** → \`${{ steps.versions.outputs.new }}\`.
+
+          - Conflicts auto-resolved: version files (\`packages/{opencode,plugin,web}/package.json\`) bumped to \`${{ steps.versions.outputs.new }}\`, \`bun.lock\` regenerated.
+          - Doc version refs in \`LOCAL_REINSTALL.md\` and \`CUSTOM_FEATURES.md\` updated.
+          - Typecheck (\`bun run --cwd packages/opencode typecheck\`): **${TC_STATUS}**${TC_STATUS != 'success' && ' — review before merge.' || ''}
+
+          Generated by \`.github/workflows/sync-upstream.yml\`.
+          EOF
+          )
+
+          if gh pr view "$BRANCH" --json number > /dev/null 2>&1; then
+            gh pr edit "$BRANCH" --title "chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" --body "$BODY"
+          else
+            gh pr create \
+              --base "${BASE_BRANCH}" \
+              --head "$BRANCH" \
+              --title "chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" \
+              --body "$BODY" \
+              --label "auto-sync"
+          fi
+
+      - name: Open draft PR (manual resolve required)
+        if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.versions.outputs.branch }}"
+          REMAINING="${{ steps.merge.outputs.remaining_files }}"
+
+          BODY=$(cat <<EOF
+          Auto-sync of upstream **v${{ steps.versions.outputs.upstream }}** → \`${{ steps.versions.outputs.new }}\` left files in conflict that need human judgment.
+
+          ## Files needing manual resolution
+          \`\`\`
+          ${REMAINING}
+          \`\`\`
+
+          ## How to finish
+          \`\`\`bash
+          git fetch origin "${BRANCH}"
+          git checkout "${BRANCH}"
+          # Resolve conflict markers in the files above, then:
+          git add -A && git commit --amend --no-edit
+          git push --force-with-lease origin "${BRANCH}"
+          \`\`\`
+
+          Once resolved, mark this PR ready for review.
+
+          Generated by \`.github/workflows/sync-upstream.yml\`.
+          EOF
+          )
+
+          if gh pr view "$BRANCH" --json number > /dev/null 2>&1; then
+            gh pr edit "$BRANCH" --title "DRAFT chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" --body "$BODY"
+          else
+            gh pr create \
+              --base "${BASE_BRANCH}" \
+              --head "$BRANCH" \
+              --draft \
+              --title "DRAFT chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" \
+              --body "$BODY" \
+              --label "auto-sync,needs-manual-merge"
+          fi
