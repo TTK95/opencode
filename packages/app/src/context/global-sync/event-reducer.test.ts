@@ -493,6 +493,31 @@ describe("applyDirectoryEvent", () => {
     expect(store.question[sessionID]?.map((x) => x.id)).toEqual(["q_1", "q_3"])
   })
 
+  test("syncs todo.updated into both session and global todo stores", () => {
+    const sessionID = "ses_1"
+    const todos = [
+      { id: "todo_1", content: "First", status: "pending" },
+      { id: "todo_2", content: "Second", status: "in_progress" },
+    ] as Todo[]
+    const seen: Array<{ sessionID: string; todos: Todo[] | undefined }> = []
+    const [store, setStore] = createStore(baseState())
+
+    applyDirectoryEvent({
+      event: { type: "todo.updated", properties: { sessionID, todos } },
+      store,
+      setStore,
+      push() {},
+      directory: "/tmp",
+      loadLsp() {},
+      setSessionTodo(sessionID, value) {
+        seen.push({ sessionID, todos: value })
+      },
+    })
+
+    expect(store.todo[sessionID]?.map((todo) => todo.id)).toEqual(["todo_1", "todo_2"])
+    expect(seen).toEqual([{ sessionID, todos }])
+  })
+
   test("updates vcs branch in store and cache", () => {
     const [store, setStore] = createStore(baseState({ vcs: { branch: "main", default_branch: "main" } }))
     const [cacheStore, setCacheStore] = createStore({

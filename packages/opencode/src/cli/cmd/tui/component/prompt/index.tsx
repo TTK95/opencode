@@ -43,6 +43,7 @@ import { DialogSkill } from "../dialog-skill"
 import { DialogWorkspaceCreate, restoreWorkspaceSession } from "../dialog-workspace-create"
 import { DialogWorkspaceUnavailable } from "../dialog-workspace-unavailable"
 import { useArgs } from "@tui/context/args"
+import { createYoloCommandOption } from "./yolo"
 
 export type PromptProps = {
   sessionID?: string
@@ -437,61 +438,13 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        title: "YOLO",
-        value: "session.yolo",
-        category: "Session",
-        slash: {
-          name: "yolo",
-        },
-        onSelect: async () => {
-          const sessionID = props.sessionID
-          if (!sessionID) {
-            toast.show({
-              variant: "warning",
-              message: "Open or start a session first",
-              duration: 3000,
-            })
-            return
-          }
-          const current = sync.session.get(sessionID)?.permission ?? []
-          const hasYolo = current.some(
-            (r) => r.permission === "*" && r.pattern === "*" && r.action === "allow",
-          )
-          try {
-            if (hasYolo) {
-              const filtered = current.filter(
-                (r) => !(r.permission === "*" && r.pattern === "*" && r.action === "allow"),
-              )
-              await sdk.client.session.update({
-                sessionID,
-                permission: filtered,
-                permissionMode: "replace",
-              })
-              toast.show({
-                variant: "info",
-                message: "YOLO mode disabled",
-                duration: 3000,
-              })
-            } else {
-              await sdk.client.session.update({
-                sessionID,
-                permission: [{ permission: "*", pattern: "*", action: "allow" }],
-              })
-              toast.show({
-                variant: "warning",
-                message: "YOLO mode enabled — permissions auto-approved this session",
-                duration: 4000,
-              })
-            }
-            await sync.session.sync(sessionID)
-          } catch (err) {
-            toast.show({
-              variant: "error",
-              message: `YOLO toggle failed: ${err instanceof Error ? err.message : String(err)}`,
-              duration: 5000,
-            })
-          }
-        },
+        ...createYoloCommandOption({
+          sessionID: props.sessionID,
+          permissions: sync.session.get(props.sessionID ?? "")?.permission ?? [],
+          update: (input) => sdk.client.session.update(input),
+          sync: (sessionID) => sync.session.sync(sessionID),
+          toast,
+        }),
       },
     ]
   })
