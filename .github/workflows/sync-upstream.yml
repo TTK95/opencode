@@ -102,11 +102,31 @@ jobs:
         # clobber human commits when GitHub's API has a hiccup.
         run: |
           BRANCH="${{ steps.versions.outputs.branch }}"
-          if ! git ls-remote --exit-code --heads origin "${BRANCH}" > /dev/null 2>&1; then
+
+          # `git ls-remote --exit-code` returns:
+          #   0 — refs found
+          #   2 — no matching refs (clean negative — branch doesn't exist)
+          #   * — real error (auth, network, …) → fail closed
+          # Treating any non-zero as "branch missing" (the prior `2>&1`
+          # one-liner) silently re-enabled clobber on transient remote
+          # outages.
+          set +e
+          git ls-remote --exit-code --heads origin "${BRANCH}" > /dev/null 2>&1
+          LS_RC=$?
+          set -e
+
+          if [ "$LS_RC" -eq 2 ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if [ "$LS_RC" -ne 0 ]; then
+            echo "::error::git ls-remote for ${BRANCH} failed (rc=${LS_RC}); failing closed to avoid clobbering an in-progress branch."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
+          # Branch exists on remote — check whether an open PR is
+          # tracking it (i.e. mid-resolution).
           set +e
           PR_NUM=$(gh pr list --head "${BRANCH}" --state open --json number --jq '.[0].number // empty' 2>/dev/null)
           PR_LIST_RC=$?
