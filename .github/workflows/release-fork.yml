@@ -87,9 +87,16 @@ jobs:
 
       - name: Package zip
         shell: pwsh
+        # Zip the `bin` directory itself (not its contents). The upgrade
+        # flow extracts the archive into <installRoot>; we need the
+        # archive root to be `bin/...` so the new binary lands at
+        # <installRoot>/bin/opencode.exe — the path the launcher reads.
+        # `Compress-Archive -Path bin/*` would flatten and write
+        # opencode.exe at <installRoot>/, leaving the launcher pointing
+        # at the stale binary in bin/.
         run: |
           Compress-Archive `
-            -Path "packages/opencode/dist/opencode-windows-x64/bin/*" `
+            -Path "packages/opencode/dist/opencode-windows-x64/bin" `
             -DestinationPath "opencode-windows-x64.zip" `
             -Force
 

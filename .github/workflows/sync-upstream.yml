@@ -65,7 +65,15 @@ jobs:
           echo "fork=${FORK_VERSION}"         >> "$GITHUB_OUTPUT"
           echo "new=${NEW_VERSION}"           >> "$GITHUB_OUTPUT"
           echo "branch=${BRANCH}"             >> "$GITHUB_OUTPUT"
-          if [ "${FORK_VERSION}" = "${NEW_VERSION}" ]; then
+
+          # "already synced" must mean "no upstream commits we don't have",
+          # not "version strings match". Upstream lands many commits per
+          # version (chore: generate, sync release notes, fixes between
+          # version bumps); a version-only check would silently miss them
+          # and stop opening sync PRs while the fork drifts behind.
+          BEHIND_COUNT=$(git rev-list --count "HEAD..upstream/${UPSTREAM_REF}")
+          echo "behind=${BEHIND_COUNT}" >> "$GITHUB_OUTPUT"
+          if [ "${BEHIND_COUNT}" = "0" ]; then
             echo "already_synced=true" >> "$GITHUB_OUTPUT"
           else
             echo "already_synced=false" >> "$GITHUB_OUTPUT"
@@ -74,7 +82,7 @@ jobs:
       - name: Bail if already synced
         if: steps.versions.outputs.already_synced == 'true'
         run: |
-          echo "Fork already at ${{ steps.versions.outputs.new }} — nothing to do."
+          echo "Fork is up to date with upstream/${UPSTREAM_REF} — nothing to do."
 
       - name: Create or reuse sync branch
         if: steps.versions.outputs.already_synced == 'false'
@@ -144,7 +152,20 @@ jobs:
 
       - name: Commit clean merge
         if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'false'
-        run: git commit --no-edit
+        # `git merge --no-ff` creates the merge commit immediately when
+        # there are no conflicts (.git/MERGE_HEAD is gone). When there
+        # *were* conflicts and the auto-resolve loop staged fixes, the
+        # merge state is still active and `git commit --no-edit`
+        # finalises it. Branch on MERGE_HEAD: amend the existing merge
+        # commit to fold in doc-bump changes; otherwise finalise.
+        run: |
+          if [ -f .git/MERGE_HEAD ]; then
+            git commit --no-edit
+          elif ! git diff --cached --quiet; then
+            git commit --amend --no-edit
+          else
+            echo "Nothing to commit (clean merge, no doc bumps)."
+          fi
 
       - name: Commit WIP for manual resolution
         if: steps.versions.outputs.already_synced == 'false' && steps.merge.outputs.manual_required == 'true'

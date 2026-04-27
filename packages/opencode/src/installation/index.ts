@@ -33,6 +33,7 @@ export type Method =
 // route `opencode upgrade` through a GitHub release on `InstallationRepo`
 // instead. Both values are stamped at build time via Bun `--define`.
 const FORK_CHANNEL = "dev_ttk"
+const UPSTREAM_REPO_DEFAULT = "anomalyco/opencode"
 
 export type ReleaseType = "patch" | "minor" | "major"
 
@@ -225,6 +226,13 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           // Use platform-native unzip into the install root. The running
           // .exe on Windows is locked — surface that as a clear error so the
           // user knows to exit other TUI sessions first.
+          //
+          // Embedded single quotes inside a single-quoted PowerShell
+          // string need to be doubled (`'` → `''`). Paths that contain
+          // an apostrophe (e.g. `O'Connor`'s home directory) would
+          // otherwise break the quoting — and worse, allow injected
+          // tokens to be parsed as PowerShell.
+          const psQuote = (s: string) => s.replace(/'/g, "''")
           const cmdArgs =
             process.platform === "win32"
               ? [
@@ -233,7 +241,7 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
                   "-NoProfile",
                   "-NonInteractive",
                   "-Command",
-                  `Expand-Archive -LiteralPath '${fsResult.zipPath}' -DestinationPath '${installRoot}' -Force`,
+                  `Expand-Archive -LiteralPath '${psQuote(fsResult.zipPath)}' -DestinationPath '${psQuote(installRoot)}' -Force`,
                 ]
               : ["unzip", "-o", fsResult.zipPath, "-d", installRoot]
 
@@ -285,7 +293,23 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
         method: Effect.fn("Installation.method")(function* () {
           // Fork builds publish a single GitHub release with a platform zip
           // — bypass package-manager detection and route upgrade through it.
-          if (InstallationChannel === FORK_CHANNEL) return "github-release" as Method
+          //
+          // Refuse to activate if the build forgot to stamp OPENCODE_REPO:
+          // a dev_ttk channel pointed at the upstream repo would silently
+          // overwrite the fork install with upstream's binary on the next
+          // upgrade. Treating this as `unknown` disables auto-upgrade and
+          // surfaces a log line; the build pipeline must set both
+          // OPENCODE_CHANNEL and OPENCODE_REPO together.
+          if (InstallationChannel === FORK_CHANNEL) {
+            if (InstallationRepo === UPSTREAM_REPO_DEFAULT) {
+              log.warn("fork-channel build is missing OPENCODE_REPO stamp; auto-upgrade disabled", {
+                channel: InstallationChannel,
+                repo: InstallationRepo,
+              })
+              return "unknown" as Method
+            }
+            return "github-release" as Method
+          }
           if (process.execPath.includes(path.join(".opencode", "bin"))) return "curl" as Method
           if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
           const exec = process.execPath.toLowerCase()
