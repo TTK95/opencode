@@ -94,15 +94,36 @@ jobs:
         # below would reset to dev and the later force-push would drop
         # those commits. Bail out instead and ask the human to merge or
         # close the existing PR first.
+        #
+        # Use `gh pr list` (not `gh pr view`) so an empty result
+        # cleanly distinguishes "no open PR" (exit 0, empty stdout)
+        # from a CLI/API failure (non-zero exit). On lookup error we
+        # *fail closed* — better to skip a sync run than to silently
+        # clobber human commits when GitHub's API has a hiccup.
         run: |
           BRANCH="${{ steps.versions.outputs.branch }}"
-          if git ls-remote --exit-code --heads origin "${BRANCH}" > /dev/null 2>&1; then
-            if gh pr view "${BRANCH}" --json state --jq '.state' 2>/dev/null | grep -qx OPEN; then
-              echo "::warning::Sync branch ${BRANCH} already has an open PR — skipping. Merge or close it first, then re-run."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
+          if ! git ls-remote --exit-code --heads origin "${BRANCH}" > /dev/null 2>&1; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          set +e
+          PR_NUM=$(gh pr list --head "${BRANCH}" --state open --json number --jq '.[0].number // empty' 2>/dev/null)
+          PR_LIST_RC=$?
+          set -e
+
+          if [ "$PR_LIST_RC" -ne 0 ]; then
+            echo "::error::gh pr list for ${BRANCH} failed (rc=${PR_LIST_RC}); failing closed to avoid clobbering an in-progress branch."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ -n "$PR_NUM" ]; then
+            echo "::warning::Sync branch ${BRANCH} already has open PR #${PR_NUM} — skipping. Merge or close it first, then re-run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Create sync branch from dev
@@ -133,12 +154,20 @@ jobs:
             fi
           done
 
-          # Auto-resolve bun.lock: take upstream then reinstall to fold in fork-only deps.
+          # Take upstream's bun.lock, but defer regeneration until *after*
+          # the conflict scan. If a non-whitelisted file (e.g. another
+          # package.json or a workspace member) still has conflict
+          # markers, `bun install` would try to parse it, fail, and the
+          # `set -e` shell would abort the job before we reach the
+          # manual-required output write — so the draft-PR path never
+          # runs and the workflow looks like a hard failure instead of
+          # a deferred-to-human handoff.
+          BUN_LOCK_TAKEN=false
           if git ls-files -u -- bun.lock | grep -q .; then
             git checkout --theirs -- bun.lock
-            bun install --no-summary
             git add bun.lock
-            echo "auto-resolved: bun.lock"
+            BUN_LOCK_TAKEN=true
+            echo "took upstream's bun.lock (regeneration deferred)"
           fi
 
           # Anything still unresolved?
@@ -153,6 +182,14 @@ jobs:
             echo "::warning::Manual resolution needed for:"
             echo "$REMAINING"
           else
+            # Only safe to regenerate the lockfile now — the working tree
+            # is conflict-free, so bun install can parse every workspace
+            # package.json without choking on `<<<<<<<` markers.
+            if [ "$BUN_LOCK_TAKEN" = "true" ]; then
+              bun install --no-summary
+              git add bun.lock
+              echo "auto-resolved: bun.lock (regenerated against fork deps)"
+            fi
             echo "manual_required=false" >> "$GITHUB_OUTPUT"
           fi
 
