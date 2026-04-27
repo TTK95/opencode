@@ -76,13 +76,18 @@ jobs:
 
       - name: Smoke test binary
         shell: pwsh
+        # Use a substring (`-notlike *expected*`) rather than `-notmatch`
+        # so the version is treated as a literal — `1.14.28-dev_ttk`
+        # contains regex metachars (`.`) that would silently match too
+        # much under `-notmatch`.
         run: |
           $exe = "packages/opencode/dist/opencode-windows-x64/bin/opencode.exe"
           if (-not (Test-Path $exe)) { throw "Binary not produced at $exe" }
-          $version = & $exe --version
-          Write-Host "Built $version"
-          if ($version -notmatch "${{ needs.check-version.outputs.version }}") {
-            throw "Version mismatch: expected ${{ needs.check-version.outputs.version }}, got $version"
+          $version = (& $exe --version).Trim()
+          $expected = "${{ needs.check-version.outputs.version }}"
+          Write-Host "Built '$version' (expected substring '$expected')"
+          if ($version -notlike "*$expected*") {
+            throw "Version mismatch: expected substring '$expected', got '$version'"
           }
 
       - name: Package zip

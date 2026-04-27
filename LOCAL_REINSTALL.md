@@ -63,3 +63,9 @@ Bypasses the `findBinary` walk entirely. Unset it if you ever want to test the r
 Stamping `OPENCODE_CHANNEL=dev_ttk` at build time tells the in-app upgrade flow (`opencode upgrade`, the TUI "update available" toast) to route through the fork-specific `github-release` install method instead of npm/`opencode-ai`. `OPENCODE_REPO` overrides the hardcoded upstream repo so `Installation.latest()` queries `https://api.github.com/repos/TTK95/opencode/releases/latest`. Both default to upstream values (`local` channel + `anomalyco/opencode`) when unset, so existing builds are unaffected.
 
 The release pipeline (`.github/workflows/release-fork.yml`) sets these automatically when publishing.
+
+## Caveat: don't `opencode upgrade` from a symlinked dev binary
+
+Because the npm-global install is a **symlink** to `packages/opencode/dist/opencode-windows-x64/`, running `opencode upgrade` from that build will overwrite your local `dist/` directory with whatever's in the latest GitHub release. Any in-progress source changes that haven't been built yet are unaffected, but the rebuilt binary is replaced — so the next launch runs the published release, not your dev build, until you rebuild again.
+
+If you want to test `opencode upgrade` end-to-end, use a *non-symlinked* install (e.g. install the published zip into a separate directory) so the symlink target is left alone.
