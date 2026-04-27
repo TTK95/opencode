@@ -212,6 +212,12 @@ jobs:
 
           if gh pr view "$BRANCH" --json number > /dev/null 2>&1; then
             gh pr edit "$BRANCH" --title "chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" --body "$BODY"
+            # Promote to ready-for-review if a previous sync left it in
+            # draft (manual conflict resolution path). `gh pr edit`
+            # does not toggle draft state — `gh pr ready` is the only
+            # CLI affordance for it. Allow failure so this is a no-op
+            # on PRs that are already ready.
+            gh pr ready "$BRANCH" || true
           else
             gh pr create \
               --base "${BASE_BRANCH}" \
@@ -254,6 +260,13 @@ jobs:
 
           if gh pr view "$BRANCH" --json number > /dev/null 2>&1; then
             gh pr edit "$BRANCH" --title "DRAFT chore(sync): upstream v${{ steps.versions.outputs.upstream }} → ${{ steps.versions.outputs.new }}" --body "$BODY"
+            # The "DRAFT" title prefix is cosmetic — `gh pr edit`
+            # cannot change a PR's draft state. If a previous run on
+            # this same branch landed clean and opened a non-draft PR,
+            # we'd silently leave it mergeable while pushing
+            # unresolved-conflict commits. `gh pr ready --undo` is the
+            # only CLI affordance that demotes a PR to draft.
+            gh pr ready "$BRANCH" --undo || true
           else
             gh pr create \
               --base "${BASE_BRANCH}" \
