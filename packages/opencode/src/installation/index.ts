@@ -12,7 +12,7 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { Log } from "../util"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
-import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationChannel, InstallationRepo, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { NpmConfig } from "@opencode-ai/core/npm-config"
 
 const log = Log.create({ service: "installation" })
@@ -29,11 +29,9 @@ export type Method =
   | "github-release"
   | "unknown"
 
-// Repo to query for releases / install script. Default targets upstream;
-// fork builds (channel `dev_ttk`) override this at build time so `opencode
-// upgrade` pulls from the fork's GitHub releases instead.
-const RELEASE_REPO = process.env["OPENCODE_REPO"] || "anomalyco/opencode"
-
+// Fork builds (channel `dev_ttk`) bypass package-manager detection and
+// route `opencode upgrade` through a GitHub release on `InstallationRepo`
+// instead. Both values are stamped at build time via Bun `--define`.
 const FORK_CHANNEL = "dev_ttk"
 
 export type ReleaseType = "patch" | "minor" | "major"
@@ -176,7 +174,7 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           const assetName = `opencode-${platform}-${arch}.zip`
 
           const release = yield* httpOk.execute(
-            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPO}/releases/tags/v${target}`).pipe(
+            HttpClientRequest.get(`https://api.github.com/repos/${InstallationRepo}/releases/tags/v${target}`).pipe(
               HttpClientRequest.acceptJson,
             ),
           )
@@ -188,22 +186,37 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
             return {
               code: ChildProcessSpawner.ExitCode(1),
               stdout: "",
-              stderr: `Asset ${assetName} not found in ${RELEASE_REPO} release v${target}`,
+              stderr: `Asset ${assetName} not found in ${InstallationRepo} release v${target}`,
             }
           }
 
           const zipResponse = yield* httpOk.execute(HttpClientRequest.get(asset.browser_download_url))
-          const tmpDir = yield* Effect.tryPromise({
-            try: () => fs.mkdtemp(path.join(os.tmpdir(), "opencode-upgrade-")),
-            catch: (e) => new UpgradeFailedError({ stderr: String(e) }),
-          })
-          const zipPath = path.join(tmpDir, assetName)
-
           const zipBytes = yield* zipResponse.arrayBuffer
-          yield* Effect.tryPromise({
-            try: () => fs.writeFile(zipPath, Buffer.from(zipBytes)),
-            catch: (e) => new UpgradeFailedError({ stderr: String(e) }),
+
+          // Filesystem operations route their failures to a result object
+          // (success channel) rather than the Effect error channel — the
+          // outer `Effect.orDie` would otherwise turn a transient
+          // mkdtemp/writeFile failure into a stack trace, when the caller
+          // is set up to format `{code, stderr}` into a clean
+          // UpgradeFailedError.
+          const fsResult = yield* Effect.promise(async () => {
+            let tmpDir: string | undefined
+            try {
+              tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-upgrade-"))
+              const zipPath = path.join(tmpDir, assetName)
+              await fs.writeFile(zipPath, Buffer.from(zipBytes))
+              return { ok: true as const, tmpDir, zipPath }
+            } catch (e) {
+              if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+              return {
+                ok: false as const,
+                code: ChildProcessSpawner.ExitCode(1),
+                stdout: "",
+                stderr: `Failed to stage upgrade archive: ${e}`,
+              }
+            }
           })
+          if (!fsResult.ok) return fsResult
 
           // installRoot is the directory that contains `bin/`. process.execPath
           // points at <installRoot>/bin/opencode(.exe), so two `dirname`s up.
@@ -220,12 +233,12 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
                   "-NoProfile",
                   "-NonInteractive",
                   "-Command",
-                  `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${installRoot}' -Force`,
+                  `Expand-Archive -LiteralPath '${fsResult.zipPath}' -DestinationPath '${installRoot}' -Force`,
                 ]
-              : ["unzip", "-o", zipPath, "-d", installRoot]
+              : ["unzip", "-o", fsResult.zipPath, "-d", installRoot]
 
           const result = yield* run(cmdArgs)
-          yield* Effect.tryPromise(() => fs.rm(tmpDir, { recursive: true, force: true })).pipe(Effect.ignore)
+          yield* Effect.promise(() => fs.rm(fsResult.tmpDir, { recursive: true, force: true }).catch(() => {}))
 
           if (result.code !== 0) {
             const hint =
@@ -356,7 +369,7 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           }
 
           const response = yield* httpOk.execute(
-            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPO}/releases/latest`).pipe(
+            HttpClientRequest.get(`https://api.github.com/repos/${InstallationRepo}/releases/latest`).pipe(
               HttpClientRequest.acceptJson,
             ),
           )

@@ -282,6 +282,22 @@ Default image: `node:22-alpine`.
 - `LOCAL_REINSTALL.md` — step-by-step for `bun run build --single` + symlinked global install, and the nested-binary gotcha (`opencode-ai/node_modules/opencode-windows-x64` can shadow the top-level symlink). Commit `b78d907f7`.
 - `.gitignore` — ignore `.claude/` (Claude Code settings + agent worktrees). Commit `ebce0140b`.
 
+## 10. Auto-sync upstream + fork self-update channel
+
+**What it does.**
+
+- A weekly GitHub Actions workflow (`.github/workflows/sync-upstream.yml`) merges `anomalyco/opencode@dev` into this fork's `dev` branch. The conflicts that have always been mechanical so far (version files in `packages/{opencode,plugin,web}/package.json`, `bun.lock`) auto-resolve to `<upstream>-dev_ttk`; anything else opens a draft PR with reproduction steps for manual handling. It never pushes to `dev` directly — every sync routes through a PR.
+- A new `github-release` install method in `Installation.method()` activates when builds are stamped with `OPENCODE_CHANNEL=dev_ttk`. `opencode upgrade` and the in-TUI "update available" toast then hit `https://api.github.com/repos/${InstallationRepo}/releases/latest` (default `anomalyco/opencode`, overridden to `TTK95/opencode` at build time via `OPENCODE_REPO`), download `opencode-windows-x64.zip`, and extract over the install root via `Expand-Archive` / `unzip`. Windows file-lock errors surface a clear "close other TUI sessions" hint.
+- A release workflow (`.github/workflows/release-fork.yml`) fires on `dev` pushes. If `packages/opencode/package.json`'s version doesn't already have a matching `v<version>` GitHub release, it builds windows-x64 with the fork channel + repo stamped and publishes the zip as a release asset. So once an auto-sync PR merges and bumps the version, a release follows automatically.
+
+**How to use.**
+
+- Local builds: pass `OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode` per the updated `LOCAL_REINSTALL.md`. Without these, the build falls back to upstream-style behaviour (`local` channel, `anomalyco/opencode` repo).
+- Manual upstream sync: trigger the `Sync Upstream` workflow from the Actions tab.
+- Manual fork release: trigger `Release Fork Build` from the Actions tab; it will skip if the current version already has a release.
+
+**Files.** `.github/workflows/sync-upstream.yml`, `.github/workflows/release-fork.yml`, `packages/opencode/src/installation/index.ts` (`github-release` method, `InstallationRepo` references), `packages/core/src/installation/version.ts` (`OPENCODE_REPO` global + `InstallationRepo` export), `packages/opencode/script/build.ts` (`--define` block).
+
 ---
 
 ## Not in this fork (common confusions)
