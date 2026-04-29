@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 
-import { Log } from "../util"
+import * as Log from "@opencode-ai/core/util/log"
 
 const log = Log.create({ service: "container.docker" })
 

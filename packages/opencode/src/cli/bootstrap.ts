@@ -5,7 +5,7 @@ import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
 import { Container } from "../container"
 import { Flag } from "@opencode-ai/core/flag/flag"
-import { Log } from "../util"
+import * as Log from "@opencode-ai/core/util/log"
 import { UI } from "./ui"
 
 const log = Log.create({ service: "cli.bootstrap" })

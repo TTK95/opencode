@@ -3,7 +3,7 @@ import path from "path"
 import z from "zod"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { Global } from "@opencode-ai/core/global"
-import { Log } from "../util"
+import * as Log from "@opencode-ai/core/util/log"
 import { estimate as estimateTokens } from "../util/token"
 import type { ProviderID } from "./schema"
 

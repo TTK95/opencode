@@ -4,7 +4,7 @@ import { ChildProcess } from "effect/unstable/process"
 import type { SpawnOptions } from "child_process"
 
 import { Global } from "@opencode-ai/core/global"
-import { Log } from "../util"
+import * as Log from "@opencode-ai/core/util/log"
 import * as DockerNs from "./docker"
 import * as CopyNs from "./copy"
 
