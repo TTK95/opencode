@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { Message, Part, PermissionRequest, Project, QuestionRequest, Session } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, PermissionRequest, Project, QuestionRequest, Session, Todo } from "@opencode-ai/sdk/v2/client"
 import { createStore } from "solid-js/store"
 import type { State } from "./types"
 import { applyDirectoryEvent, applyGlobalEvent, cleanupDroppedSessionCaches } from "./event-reducer"
@@ -498,7 +498,7 @@ describe("applyDirectoryEvent", () => {
     const todos = [
       { id: "todo_1", content: "First", status: "pending" },
       { id: "todo_2", content: "Second", status: "in_progress" },
-    ] as Todo[]
+    ] as unknown as Todo[]
     const seen: Array<{ sessionID: string; todos: Todo[] | undefined }> = []
     const [store, setStore] = createStore(baseState())
 
@@ -514,7 +514,7 @@ describe("applyDirectoryEvent", () => {
       },
     })
 
-    expect(store.todo[sessionID]?.map((todo) => todo.id)).toEqual(["todo_1", "todo_2"])
+    expect(store.todo[sessionID]?.map((todo) => (todo as unknown as { id: string }).id)).toEqual(["todo_1", "todo_2"])
     expect(seen).toEqual([{ sessionID, todos }])
   })
 
