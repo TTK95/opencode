@@ -29,6 +29,52 @@ Container mode runs **shell tool calls** inside a short-lived Docker container. 
 
 ---
 
+## Prerequisites
+
+Before `--container mount` / `--container copy` can do anything, the host needs:
+
+### Required
+
+- **Docker CLI on `PATH`** — `Container.prepare()` shells out to `docker` directly. No support for podman/colima/nerdctl drop-ins unless they expose a `docker` binary on `PATH`.
+- **Running Docker daemon** — `Docker.available()` calls `docker info` with a 5 s timeout at startup; if it fails, opencode logs `container runtime failed to start; continuing without sandbox` and falls back to host execution. Concretely:
+  - **Windows**: Docker Desktop running, WSL2 backend enabled.
+  - **macOS**: Docker Desktop, OrbStack, Rancher Desktop, or Colima with `docker` symlinked.
+  - **Linux**: `dockerd` running and the user in the `docker` group (or `sudo` access — but opencode invokes `docker` without sudo).
+- **opencode build with container support** — the opencode binary needs to be at a version that ships container code (this fork ≥ `1.14.21-dev_ttk`, upstream main since the container module landed). `opencode --help` must list `--container` under the default TUI command.
+- **Internet for the first run** — `Docker.ensureImage()` does an `inspect`-then-`pull`. The default image `node:22-alpine` (~50 MB compressed) must be reachable at first invocation. After that the local cache satisfies it offline.
+- **Disk space** — at least the image size (~150 MB extracted for `node:22-alpine`) plus, in `copy` mode, enough room under `~/.local/share/opencode/container/<sessionID>/workspace` to hold a copy of your project (minus the default ignores).
+- **Memory** — at least 2 GB available to Docker (the default `--memory 2g` cap). Reduce via `container.memory` in `opencode.json` on smaller machines.
+
+### Required for `mount` mode (bind mount of cwd)
+
+- **Docker Desktop file sharing** must include the drive holding your project.
+  - **Windows**: drives are shared automatically when WSL2 backend is on; no extra config for `C:\` or any path under your WSL distro. Hyper-V backend requires explicit drive sharing in *Docker Desktop → Settings → Resources → File sharing*.
+  - **macOS**: paths under your home dir work out of the box; non-default paths must be added under *Settings → Resources → File sharing*.
+- **Project path resolvable inside Docker's VM** — if your cwd is on a network share, an exotic mount, or a path Docker Desktop can't reach, the bind mount silently maps to an empty directory. Symptom: container starts, `ls /workspace` is empty.
+
+### Required for `copy` mode
+
+- **Write access to `~/.local/share/opencode/container/`** — the temp workspace lives under `Global.Path.data`, which on Windows resolves under `%LOCALAPPDATA%`/`%APPDATA%` via xdg-basedir conventions, on Linux/macOS to `$XDG_DATA_HOME` or `~/.local/share`.
+- **Free disk for the copy** — your full project tree minus default ignores (`.git`, `node_modules`, `.opencode`, `.venv`, `__pycache__`, `dist`, `build`).
+
+### Optional but useful
+
+- **Custom Docker image** — `node:22-alpine` is minimal: no `git`, no `bash`, no `make`, no compilers. If your tooling needs more, build your own image and pass `--container-image my/opencode-dev:tag` (or set `container.image` in `opencode.json`). The image must have `sh` available (for `sh -lc <cmd>`).
+- **Network for tools that need it** — default `container.network = "none"` blocks all egress. Set to `"bridge"` if `npm install` / `pip install` / `curl` need to work; `"host"` to share the host stack (incl. localhost services).
+- **Docker permissions on Linux** — add your user to the `docker` group (`sudo usermod -aG docker $USER`, then re-login). Otherwise every `docker` call fails with permission errors, and pre-boot will silently fall back to no-sandbox.
+
+### Quick sanity check
+
+```bash
+docker info --format '{{.ServerVersion}}'   # must print a version, exit 0
+docker pull node:22-alpine                  # warm the image cache
+opencode --container mount                  # should log "container runtime ready"
+```
+
+If any of those three fail, container mode won't activate — opencode will run unsandboxed instead of erroring. Watch the startup logs (`opencode --print-logs` or your log file) for the `container runtime ready` line as confirmation.
+
+---
+
 ## Wiring entry point
 
 CLI flags (`packages/opencode/src/cli/cmd/tui/thread.ts:121-129`):
