@@ -990,7 +990,29 @@ export type ProviderConfig = {
      */
     timeout?: number | false
     chunkTimeout?: number
-    [key: string]: unknown | string | boolean | number | false | number | undefined
+    /**
+     * Request- and token-rate limits for this provider. Populated automatically the first time a 429 response is received, or can be set manually.
+     */
+    rateLimit?: {
+      perMinute?: number
+      perDay?: number
+      tokensPerMinute?: number
+      tokensPerDay?: number
+    }
+    [key: string]:
+      | unknown
+      | string
+      | boolean
+      | number
+      | false
+      | number
+      | {
+          perMinute?: number
+          perDay?: number
+          tokensPerMinute?: number
+          tokensPerDay?: number
+        }
+      | undefined
   }
   models?: {
     [key: string]: {
@@ -1227,6 +1249,14 @@ export type Config = {
     preserve_recent_tokens?: number
     reserved?: number
   }
+  statusLine?: {
+    type: "command"
+    /**
+     * Shell command whose stdout becomes the status line. Runs in the session's working directory and is refreshed on a throttle. Keep output to a single short line.
+     */
+    command: string
+    padding?: number
+  }
   experimental?: {
     disable_paste_summary?: boolean
     batch_tool?: boolean
@@ -1234,6 +1264,17 @@ export type Config = {
     primary_tools?: Array<string>
     continue_loop_on_deny?: boolean
     mcp_timeout?: number
+    defer_tools?: boolean
+  }
+  container?: {
+    mode?: "off" | "mount" | "copy"
+    image?: string
+    network?: "none" | "bridge" | "host"
+    memory?: string
+    cpus?: string
+    pids?: number
+    run_as_current_user?: boolean
+    exclude?: Array<string>
   }
 }
 
@@ -1461,12 +1502,18 @@ export type File = {
   status: "added" | "deleted" | "modified"
 }
 
+export type ContainerInfo = {
+  mode: "off" | "mount" | "copy"
+  image: string
+}
+
 export type Path = {
   home: string
   state: string
   config: string
   worktree: string
   directory: string
+  container: ContainerInfo
 }
 
 export type VcsInfo = {
@@ -5124,7 +5171,6 @@ export type SessionUpdateData = {
   body?: {
     title?: string
     permission?: PermissionRuleset
-    permissionMode?: "merge" | "replace"
     time?: {
       archived?: number
     }

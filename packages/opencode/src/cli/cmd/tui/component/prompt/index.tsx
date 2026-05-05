@@ -587,6 +587,29 @@ export function Prompt(props: PromptProps) {
         }),
       },
       {
+        title: "Container",
+        description: "Show the current container sandbox mode",
+        value: "session.container",
+        category: "Session",
+        slash: {
+          name: "container",
+        },
+        onSelect: () => {
+          const info = project.instance.path().container
+          const mode = info?.mode ?? "off"
+          const image = info?.image ?? ""
+          const message =
+            mode === "off"
+              ? "Container sandbox: off — bash/edit run on the host. Restart with `opencode --container mount` or `--container copy` to sandbox."
+              : `Container sandbox: ${mode}${image ? ` (image: ${image})` : ""}. Bash/edit calls run inside Docker.`
+          toast.show({
+            variant: mode === "off" ? "info" : "warning",
+            message,
+            duration: 6000,
+          })
+        },
+      },
+      {
         title: "Warp",
         description: "Change the workspace for the session",
         value: "workspace.set",

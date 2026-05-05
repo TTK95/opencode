@@ -27,12 +27,17 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
 
     const getPath = Effect.fn("InstanceHttpApi.path")(function* () {
       const ctx = yield* InstanceState.context
+      const runtime = ctx.container
       return {
         home: Global.Path.home,
         state: Global.Path.state,
         config: Global.Path.config,
         worktree: ctx.worktree,
         directory: ctx.directory,
+        container: {
+          mode: (runtime?.mode ?? "off") as "off" | "mount" | "copy",
+          image: runtime && runtime.mode !== "off" ? runtime.config.image : "",
+        },
       }
     })
 

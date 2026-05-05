@@ -11,12 +11,18 @@ import { InstanceContextMiddleware } from "../middleware/instance-context"
 import { WorkspaceRoutingMiddleware } from "../middleware/workspace-routing"
 import { described } from "./metadata"
 
+const ContainerInfo = Schema.Struct({
+  mode: Schema.Literals(["off", "mount", "copy"]),
+  image: Schema.String,
+}).annotate({ identifier: "ContainerInfo" })
+
 const PathInfo = Schema.Struct({
   home: Schema.String,
   state: Schema.String,
   config: Schema.String,
   worktree: Schema.String,
   directory: Schema.String,
+  container: ContainerInfo,
 }).annotate({ identifier: "Path" })
 
 export const VcsDiffQuery = Schema.Struct({

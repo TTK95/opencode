@@ -2994,7 +2994,6 @@ export class Session2 extends HeyApiClient {
       workspace?: string
       title?: string
       permission?: PermissionRuleset
-      permissionMode?: "merge" | "replace"
       time?: {
         archived?: number
       }
@@ -3011,7 +3010,6 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "workspace" },
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
-            { in: "body", key: "permissionMode" },
             { in: "body", key: "time" },
           ],
         },

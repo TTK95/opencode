@@ -5,6 +5,7 @@ import { useDirectory } from "../../context/directory"
 import { useConnected } from "../../component/use-connected"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { ContainerBadge, YoloBadge } from "../../component/runtime-badges"
 
 export function Footer() {
   const { theme } = useTheme()
@@ -60,6 +61,8 @@ export function Footer() {
             </text>
           </Match>
           <Match when={connected()}>
+            <ContainerBadge compact />
+            <YoloBadge compact />
             <Show when={permissions().length > 0}>
               <text fg={theme.warning}>
                 <span style={{ fg: theme.warning }}>△</span> {permissions().length} Permission
