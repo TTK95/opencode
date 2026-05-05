@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createMemo, Show } from "solid-js"
 import { Global } from "@opencode-ai/core/global"
+import { ContainerBadge, YoloBadge } from "../../component/runtime-badges"
 
 const id = "internal:sidebar-footer"
 
@@ -63,6 +64,8 @@ function View(props: { api: TuiPluginApi }) {
         <span style={{ fg: theme().textMuted }}>{path().parent}/</span>
         <span style={{ fg: theme().text }}>{path().name}</span>
       </text>
+      <ContainerBadge />
+      <YoloBadge />
       <text fg={theme().textMuted}>
         <span style={{ fg: theme().success }}>•</span> <b>Open</b>
         <span style={{ fg: theme().text }}>

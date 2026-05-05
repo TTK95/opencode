@@ -1,6 +1,7 @@
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createMemo, Match, Show, Switch } from "solid-js"
 import { Global } from "@opencode-ai/core/global"
+import { ContainerBadge, YoloBadge } from "../../component/runtime-badges"
 
 const id = "internal:home-footer"
 
@@ -69,6 +70,8 @@ function View(props: { api: TuiPluginApi }) {
       <Directory api={props.api} />
       <Mcp api={props.api} />
       <box flexGrow={1} />
+      <ContainerBadge compact />
+      <YoloBadge compact />
       <Version api={props.api} />
     </box>
   )
