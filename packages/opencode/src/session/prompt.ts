@@ -37,6 +37,7 @@ import { NamedError } from "@opencode-ai/core/util/error"
 import { SessionProcessor } from "./processor"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
+import { Instance } from "@/project/instance"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { Shell } from "@/shell/shell"
@@ -77,6 +78,26 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 
 const log = Log.create({ service: "session.prompt" })
 const elog = EffectLogger.create({ service: "session.prompt" })
+
+// When the instance is bound to a Docker sandbox, file/shell tools execute
+// inside the container, so prompting the user for each command is noise. Yield
+// an "allow" rule for the affected permissions; user-configured agent/session
+// rules merge after these, so an explicit deny still wins.
+const SANDBOX_PERMISSIONS = ["bash", "external_directory", "edit"] as const
+function sandboxRuleset(): Permission.Ruleset {
+  let runtime
+  try {
+    runtime = Instance.current.container
+  } catch {
+    return []
+  }
+  if (!runtime || runtime.mode === "off") return []
+  return SANDBOX_PERMISSIONS.map((permission) => ({
+    permission,
+    pattern: "*",
+    action: "allow" as const,
+  }))
+}
 
 export interface Interface {
   readonly cancel: (sessionID: SessionID) => Effect.Effect<void>
@@ -407,7 +428,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               ...req,
               sessionID: input.session.id,
               tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-              ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+              ruleset: Permission.merge(
+                sandboxRuleset(),
+                input.agent.permission,
+                input.session.permission ?? [],
+              ),
             })
             .pipe(Effect.orDie),
       })
