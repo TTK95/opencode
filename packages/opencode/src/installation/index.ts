@@ -194,19 +194,58 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           const zipResponse = yield* httpOk.execute(HttpClientRequest.get(asset.browser_download_url))
           const zipBytes = yield* zipResponse.arrayBuffer
 
+          // installRoot is the directory that contains `bin/`. process.execPath
+          // points at <installRoot>/bin/opencode(.exe), so two `dirname`s up.
+          const installRoot = path.dirname(path.dirname(process.execPath))
+          const isWindows = process.platform === "win32"
+
           // Filesystem operations route their failures to a result object
           // (success channel) rather than the Effect error channel — the
           // outer `Effect.orDie` would otherwise turn a transient
           // mkdtemp/writeFile failure into a stack trace, when the caller
           // is set up to format `{code, stderr}` into a clean
           // UpgradeFailedError.
+          //
+          // Windows pre-step: the running .exe is locked against in-place
+          // overwrite, but Win32 MoveFile (fs.rename) is allowed for a
+          // running binary. Side-step the lock by renaming the old binary
+          // out of the way so the extractor can drop the new exe at the
+          // original path. Rolled back on extraction failure (see below).
+          // Stale .old-* artefacts from prior upgrades are cleaned best-
+          // effort here; locked ones will linger until the next upgrade
+          // clears them.
           const fsResult = yield* Effect.promise(async () => {
             let tmpDir: string | undefined
             try {
               tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-upgrade-"))
               const zipPath = path.join(tmpDir, assetName)
               await fs.writeFile(zipPath, Buffer.from(zipBytes))
-              return { ok: true as const, tmpDir, zipPath }
+
+              let stepAside: string | undefined
+              if (isWindows) {
+                const binDir = path.dirname(process.execPath)
+                try {
+                  for (const name of await fs.readdir(binDir)) {
+                    if (!name.includes(".old-")) continue
+                    await fs.rm(path.join(binDir, name), { force: true }).catch(() => {})
+                  }
+                } catch {
+                  // bin dir missing or unreadable — nothing to clean
+                }
+                try {
+                  stepAside = `${process.execPath}.old-${Date.now()}`
+                  await fs.rename(process.execPath, stepAside)
+                } catch (e) {
+                  return {
+                    ok: false as const,
+                    code: ChildProcessSpawner.ExitCode(1),
+                    stdout: "",
+                    stderr: `Could not move running binary out of the way at ${process.execPath}: ${e instanceof Error ? e.message : String(e)}`,
+                  }
+                }
+              }
+
+              return { ok: true as const, tmpDir, zipPath, stepAside }
             } catch (e) {
               if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
               return {
@@ -219,42 +258,74 @@ export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildPro
           })
           if (!fsResult.ok) return fsResult
 
-          // installRoot is the directory that contains `bin/`. process.execPath
-          // points at <installRoot>/bin/opencode(.exe), so two `dirname`s up.
-          const installRoot = path.dirname(path.dirname(process.execPath))
-
-          // Use platform-native unzip into the install root. The running
-          // .exe on Windows is locked — surface that as a clear error so the
-          // user knows to exit other TUI sessions first.
+          // Use platform-native unzip into the install root.
           //
           // Embedded single quotes inside a single-quoted PowerShell
           // string need to be doubled (`'` → `''`). Paths that contain
           // an apostrophe (e.g. `O'Connor`'s home directory) would
           // otherwise break the quoting — and worse, allow injected
           // tokens to be parsed as PowerShell.
+          //
+          // Expand-Archive emits non-terminating errors by default, so a
+          // locked file silently exits 0. Force any error to terminate
+          // with a non-zero exit code.
           const psQuote = (s: string) => s.replace(/'/g, "''")
-          const cmdArgs =
-            process.platform === "win32"
-              ? [
-                  "powershell",
-                  "-NoLogo",
-                  "-NoProfile",
-                  "-NonInteractive",
-                  "-Command",
-                  `Expand-Archive -LiteralPath '${psQuote(fsResult.zipPath)}' -DestinationPath '${psQuote(installRoot)}' -Force`,
-                ]
-              : ["unzip", "-o", fsResult.zipPath, "-d", installRoot]
+          const cmdArgs = isWindows
+            ? [
+                "powershell",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                `$ErrorActionPreference='Stop'; try { Expand-Archive -LiteralPath '${psQuote(fsResult.zipPath)}' -DestinationPath '${psQuote(installRoot)}' -Force } catch { Write-Error ($_ | Out-String); exit 1 }`,
+              ]
+            : ["unzip", "-o", fsResult.zipPath, "-d", installRoot]
 
           const result = yield* run(cmdArgs)
           yield* Effect.promise(() => fs.rm(fsResult.tmpDir, { recursive: true, force: true }).catch(() => {}))
 
+          // Verify the new binary actually landed. If the extractor exited 0
+          // without writing to process.execPath (e.g. archive shape changed,
+          // or zip rooted differently), the user would otherwise see a
+          // success message and the wrong version still installed.
+          const replaced =
+            result.code === 0
+              ? yield* Effect.promise(() =>
+                  fs
+                    .access(process.execPath)
+                    .then(() => true)
+                    .catch(() => false),
+                )
+              : false
+
+          // Roll back on Windows if extraction failed or the binary is
+          // missing — otherwise the user is left with no opencode at all.
+          if (isWindows && fsResult.stepAside && (result.code !== 0 || !replaced)) {
+            yield* Effect.promise(() =>
+              fs.rename(fsResult.stepAside!, process.execPath).catch(() => {
+                // Rollback failed — leave the .old-* file in place so the
+                // user can recover manually. The error from the extractor
+                // is the more useful message to surface.
+              }),
+            )
+          }
+
           if (result.code !== 0) {
             const hint =
-              process.platform === "win32" && /denied|in use|busy/i.test(result.stderr)
-                ? " (the running opencode.exe may be locking the file — close other TUI sessions and retry)"
+              isWindows && /denied|in use|busy/i.test(result.stderr)
+                ? " (another opencode process may be locking the file — close other TUI sessions and retry)"
                 : ""
             return { code: result.code, stdout: result.stdout, stderr: result.stderr + hint }
           }
+
+          if (!replaced) {
+            return {
+              code: ChildProcessSpawner.ExitCode(1),
+              stdout: result.stdout,
+              stderr: `Upgrade archive extracted but ${process.execPath} is missing — extraction may have silently failed.`,
+            }
+          }
+
           return result
         },
         Effect.scoped,
