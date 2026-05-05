@@ -1,11 +1,12 @@
 import { ulid } from "ulid"
 
-import { AppRuntime } from "@/effect/app-runtime"
-import { InstanceBootstrap } from "../project/bootstrap"
-import { Instance } from "../project/instance"
-import { Container } from "../container"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import * as Log from "@opencode-ai/core/util/log"
+import { Container } from "../container"
+import { registerDisposer } from "@/effect/instance-registry"
+import { Instance } from "../project/instance"
+import { InstanceRuntime } from "../project/instance-runtime"
+import { WithInstance } from "../project/with-instance"
 import { UI } from "./ui"
 
 const log = Log.create({ service: "cli.bootstrap" })
@@ -38,25 +39,31 @@ export async function bootstrap<T>(
       // workspace so file tools operate on the copy and bash exec paths inside the
       // container line up with host-side reads.
       boundDirectory = runtime.copyTempDir
-      UI.println(
-        `  ${UI.Style.TEXT_DIM}workspace: ${runtime.copyTempDir}${UI.Style.TEXT_NORMAL}`,
-      )
+      UI.println(`  ${UI.Style.TEXT_DIM}workspace: ${runtime.copyTempDir}${UI.Style.TEXT_NORMAL}`)
       UI.println(
         `  ${UI.Style.TEXT_DIM}export: opencode container export ${sessionID}${UI.Style.TEXT_NORMAL}`,
       )
     }
+    const containerRuntime = runtime
+    registerDisposer(async (dir) => {
+      if (dir !== boundDirectory) return
+      try {
+        await containerRuntime.destroy()
+      } catch (err) {
+        log.warn("container destroy failed", { error: String(err) })
+      }
+    })
   }
 
-  return Instance.provide({
+  return WithInstance.provide({
     directory: boundDirectory,
     container: runtime,
-    init: () => AppRuntime.runPromise(InstanceBootstrap),
     fn: async () => {
       try {
         const result = await cb()
         return result
       } finally {
-        await Instance.dispose()
+        await InstanceRuntime.disposeInstance(Instance.current)
       }
     },
   })

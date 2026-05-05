@@ -1,18 +1,22 @@
 import { Installation } from "@/installation"
 import { Server } from "@/server/server"
 import * as Log from "@opencode-ai/core/util/log"
-import { Instance } from "@/project/instance"
-import { InstanceBootstrap } from "@/project/bootstrap"
+import { InstanceRuntime } from "@/project/instance-runtime"
+import { WithInstance } from "@/project/with-instance"
 import { Rpc } from "@/util/rpc"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { ServerAuth } from "@/server/auth"
 import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { ensureProcessMetadata } from "@opencode-ai/core/util/opencode-process"
+import { Effect } from "effect"
+import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 import { Container } from "@/container"
+import { Flag } from "@opencode-ai/core/flag/flag"
+import { registerDisposer } from "@/effect/instance-registry"
 import { ulid } from "ulid"
 
 ensureProcessMetadata("worker")
@@ -47,10 +51,10 @@ GlobalBus.on("event", (event) => {
 
 // If the TUI was launched with --container (or OPENCODE_CONTAINER env), pre-boot
 // the Instance for the worker's cwd with a container runtime. Subsequent
-// Instance.provide calls from the in-process server hit the same directory
-// cache entry and reuse the runtime, so bash/shell tools route into Docker.
-// Copy-mode redirects the instance directory to the isolated workspace so all
-// tools (files + shell) operate on the copy.
+// WithInstance.provide calls for the same directory hit the InstanceStore cache
+// and reuse the runtime, so bash/shell tools route into Docker. Copy-mode
+// redirects the instance directory to the isolated workspace so all tools
+// (files + shell) operate on the copy.
 async function preBootContainer() {
   const mode = Container.fromEnv()
   if (!mode || mode === "off") return
@@ -67,10 +71,17 @@ async function preBootContainer() {
   try {
     const runtime = await Container.prepare(sessionID, process.cwd(), cfg)
     const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : process.cwd()
-    await Instance.provide({
+    registerDisposer(async (dir) => {
+      if (dir !== directory) return
+      try {
+        await runtime.destroy()
+      } catch (err) {
+        Log.Default.warn("container destroy failed", { error: String(err) })
+      }
+    })
+    await WithInstance.provide({
       directory,
       container: runtime,
-      init: () => AppRuntime.runPromise(InstanceBootstrap),
       fn: async () => undefined,
     })
     Log.Default.info("container runtime ready", {
@@ -91,7 +102,7 @@ let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
-    const auth = getAuthorizationHeader()
+    const auth = ServerAuth.header()
     if (auth && !headers["authorization"] && !headers["Authorization"]) {
       headers["Authorization"] = auth
     }
@@ -118,30 +129,28 @@ export const rpc = {
     return { url: server.url.toString() }
   },
   async checkUpgrade(input: { directory: string }) {
-    await Instance.provide({
+    await WithInstance.provide({
       directory: input.directory,
-      init: () => AppRuntime.runPromise(InstanceBootstrap),
       fn: async () => {
         await upgrade().catch(() => {})
       },
     })
   },
   async reload() {
-    await AppRuntime.runPromise(Config.Service.use((cfg) => cfg.invalidate(true)))
+    await AppRuntime.runPromise(
+      Effect.gen(function* () {
+        const cfg = yield* Config.Service
+        yield* cfg.invalidate()
+        yield* disposeAllInstancesAndEmitGlobalDisposed({ swallowErrors: true })
+      }),
+    )
   },
   async shutdown() {
     Log.Default.info("worker shutting down")
 
-    await Instance.disposeAll()
+    await InstanceRuntime.disposeAllInstances()
     if (server) await server.stop(true)
   },
 }
 
 Rpc.listen(rpc)
-
-function getAuthorizationHeader(): string | undefined {
-  const password = Flag.OPENCODE_SERVER_PASSWORD
-  if (!password) return undefined
-  const username = Flag.OPENCODE_SERVER_USERNAME ?? "opencode"
-  return `Basic ${btoa(`${username}:${password}`)}`
-}

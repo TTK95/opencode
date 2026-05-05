@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test"
 import { AppRuntime } from "../../src/effect/app-runtime"
-import { Instance } from "../../src/project/instance"
+import { WithInstance } from "../../src/project/with-instance"
 import { Session as SessionNs } from "../../src/session/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID } from "../../src/session/schema"
@@ -24,13 +24,13 @@ describe("stats command", () => {
     async () => {
     await using tmp = await tmpdir({ git: true })
 
-    const session = await Instance.provide({
+    const session = await WithInstance.provide({
       directory: tmp.path,
       fn: async () =>
         AppRuntime.runPromise(SessionNs.Service.use((svc) => svc.create({ title: "stats test" }))),
     })
 
-    await Instance.provide({
+    await WithInstance.provide({
       directory: tmp.path,
       fn: async () => {
         const user1 = MessageID.ascending()
@@ -88,7 +88,7 @@ describe("stats command", () => {
     })
 
     const { aggregateSessionStats, displayStats } = await import("../../src/cli/cmd/stats")
-    const stats = await aggregateSessionStats()
+    const stats = await AppRuntime.runPromise(aggregateSessionStats())
 
     expect(stats.totalMessages).toBe(3)
     expect(stats.userMessages).toBe(2)
