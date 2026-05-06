@@ -11,9 +11,26 @@ import { InstanceContextMiddleware } from "../middleware/instance-context"
 import { WorkspaceRoutingMiddleware } from "../middleware/workspace-routing"
 import { described } from "./metadata"
 
+const ContainerDiagnostic = Schema.Struct({
+  status: Schema.Literals([
+    "not-attempted",
+    "skipped-no-env",
+    "skipped-off",
+    "preparing",
+    "succeeded",
+    "failed",
+  ]),
+  envValue: Schema.String,
+  error: Schema.String,
+  cwd: Schema.String,
+  directory: Schema.String,
+  containerID: Schema.String,
+}).annotate({ identifier: "ContainerDiagnostic" })
+
 const ContainerInfo = Schema.Struct({
   mode: Schema.Literals(["off", "mount", "copy"]),
   image: Schema.String,
+  diagnostic: ContainerDiagnostic,
 }).annotate({ identifier: "ContainerInfo" })
 
 const PathInfo = Schema.Struct({

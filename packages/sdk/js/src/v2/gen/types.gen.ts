@@ -1502,9 +1502,19 @@ export type File = {
   status: "added" | "deleted" | "modified"
 }
 
+export type ContainerDiagnostic = {
+  status: "not-attempted" | "skipped-no-env" | "skipped-off" | "preparing" | "succeeded" | "failed"
+  envValue: string
+  error: string
+  cwd: string
+  directory: string
+  containerID: string
+}
+
 export type ContainerInfo = {
   mode: "off" | "mount" | "copy"
   image: string
+  diagnostic: ContainerDiagnostic
 }
 
 export type Path = {

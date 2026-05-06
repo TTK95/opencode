@@ -32,6 +32,7 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
       // the container — happens when this handler runs through a different
       // InstanceStore.Service instance than the one preBootContainer populated.
       const runtime = ctx.container ?? ContainerRegistry.lookup(ctx.directory)
+      const diag = ContainerRegistry.getDiagnostic()
       return {
         home: Global.Path.home,
         state: Global.Path.state,
@@ -41,6 +42,14 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
         container: {
           mode: (runtime?.mode ?? "off") as "off" | "mount" | "copy",
           image: runtime && runtime.mode !== "off" ? runtime.config.image : "",
+          diagnostic: {
+            status: diag.status,
+            envValue: diag.envValue ?? "",
+            error: diag.error ?? "",
+            cwd: diag.cwd,
+            directory: diag.directory ?? "",
+            containerID: diag.containerID ?? "",
+          },
         },
       }
     })

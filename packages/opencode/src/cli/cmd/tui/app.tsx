@@ -22,7 +22,7 @@ import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { DialogProvider as DialogProviderList } from "@tui/component/dialog-provider"
 import { ErrorComponent } from "@tui/component/error-component"
 import { PluginRouteMissing } from "@tui/component/plugin-route-missing"
-import { ProjectProvider } from "@tui/context/project"
+import { ProjectProvider, useProject } from "@tui/context/project"
 import { EditorContextProvider } from "@tui/context/editor"
 import { useEvent } from "@tui/context/event"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
@@ -224,6 +224,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const themeState = useTheme()
   const { theme, mode, setMode, locked, lock, unlock } = themeState
   const sync = useSync()
+  const project = useProject()
   const exit = useExit()
   const promptRef = usePromptRef()
   const routes: RouteMap = new Map()
@@ -411,6 +412,53 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         // only trigger when we transition into an empty-provider state
         if (!isEmpty || wasEmpty) return
         dialog.replace(() => <DialogProviderList />)
+      },
+    ),
+  )
+
+  let preBootToastShown = false
+  createEffect(
+    on(
+      () => sync.status === "complete",
+      (ready) => {
+        if (!ready || preBootToastShown) return
+        const diag = project.instance.path().container?.diagnostic
+        if (!diag) return
+        preBootToastShown = true
+        const env = diag.envValue || "<unset>"
+        switch (diag.status) {
+          case "succeeded":
+            toast.show({
+              variant: "success",
+              duration: 5000,
+              message: `Container sandbox ready (env=${env}). Bash/edit run in Docker.`,
+            })
+            return
+          case "failed":
+            toast.show({
+              variant: "error",
+              duration: 12000,
+              message:
+                `Container sandbox FAILED (env=${env}).\n` +
+                `Reason: ${diag.error || "(no error message)"}\n` +
+                `Bash/edit will run on the HOST. Check Docker is running.`,
+            })
+            return
+          case "skipped-off":
+            toast.show({
+              variant: "info",
+              duration: 4000,
+              message: `Container: off — bash/edit run on the host.`,
+            })
+            return
+          case "skipped-no-env":
+          case "not-attempted":
+            // No --container flag passed; not noteworthy.
+            return
+          case "preparing":
+            // Should not happen at sync-complete time, but harmless.
+            return
+        }
       },
     ),
   )

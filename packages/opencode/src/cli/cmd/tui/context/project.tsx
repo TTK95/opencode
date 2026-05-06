@@ -17,7 +17,18 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       config: "",
       worktree: "",
       directory: sdk.directory ?? "",
-      container: { mode: "off", image: "" },
+      container: {
+        mode: "off",
+        image: "",
+        diagnostic: {
+          status: "not-attempted",
+          envValue: "",
+          error: "",
+          cwd: "",
+          directory: "",
+          containerID: "",
+        },
+      },
     }
 
     const [store, setStore] = createStore({

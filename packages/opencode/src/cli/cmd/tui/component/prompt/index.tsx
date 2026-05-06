@@ -599,6 +599,7 @@ export function Prompt(props: PromptProps) {
           const info = project.instance.path().container
           const mode = info?.mode ?? "off"
           const image = info?.image ?? ""
+          const diag = info?.diagnostic
           const sid = props.sessionID
           const session = sid ? sync.session.get(sid) : undefined
           const rules = (session?.permission ?? []) as Array<{
@@ -611,13 +612,18 @@ export function Prompt(props: PromptProps) {
           const effBash = evaluateAction("bash", rules)
           const effEdit = evaluateAction("edit", rules)
           const containerLine = `container: ${mode}${image ? ` (${image})` : ""}`
+          const preBootLine = diag
+            ? `preBoot: ${diag.status} (env=${diag.envValue || "<unset>"}${diag.error ? `, err=${diag.error}` : ""})`
+            : "preBoot: <unknown>"
           const sessionLine = `session: ${sid ?? "(none)"}`
           const rulesLine = `rules: ${dump}`
           const effectiveLine = `effective: bash=${effBash} edit=${effEdit}`
+          const variant: "info" | "warning" | "error" =
+            diag?.status === "failed" ? "error" : mode === "off" ? "info" : "warning"
           toast.show({
-            variant: mode === "off" ? "info" : "warning",
-            message: [containerLine, sessionLine, rulesLine, effectiveLine].join("\n"),
-            duration: 12000,
+            variant,
+            message: [containerLine, preBootLine, sessionLine, rulesLine, effectiveLine].join("\n"),
+            duration: 15000,
           })
         },
       },

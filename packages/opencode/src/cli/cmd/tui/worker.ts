@@ -57,22 +57,54 @@ GlobalBus.on("event", (event) => {
 // redirects the instance directory to the isolated workspace so all tools
 // (files + shell) operate on the copy.
 async function preBootContainer() {
+  const cwd = process.cwd()
+  const envValue = process.env["OPENCODE_CONTAINER"]
   const mode = Container.fromEnv()
-  if (!mode || mode === "off") return
+  ContainerRegistry.setDiagnostic({
+    cwd,
+    envValue,
+    resolvedMode: mode,
+    startedAt: Date.now(),
+  })
+  if (!mode) {
+    ContainerRegistry.setDiagnostic({ status: "skipped-no-env", finishedAt: Date.now() })
+    Log.Default.info("preBootContainer: skipped (OPENCODE_CONTAINER not set)", { envValue, cwd })
+    process.stderr.write(`opencode container: skipped (OPENCODE_CONTAINER env not set; cwd=${cwd})\n`)
+    return
+  }
+  if (mode === "off") {
+    ContainerRegistry.setDiagnostic({ status: "skipped-off", finishedAt: Date.now() })
+    Log.Default.info("preBootContainer: skipped (mode=off)", { envValue, cwd })
+    process.stderr.write(`opencode container: off (envValue=${envValue})\n`)
+    return
+  }
   const cfg = Container.merge(Container.DEFAULTS, {
     mode,
     ...(Flag.OPENCODE_CONTAINER_IMAGE ? { image: Flag.OPENCODE_CONTAINER_IMAGE } : {}),
   })
+  ContainerRegistry.setDiagnostic({
+    status: "preparing",
+    configMode: cfg.mode,
+    configImage: cfg.image,
+  })
   const sessionID = ulid().toLowerCase()
-  Log.Default.info("preparing container runtime for TUI", {
+  Log.Default.info("preBootContainer: preparing", {
     mode: cfg.mode,
     image: cfg.image,
-    cwd: process.cwd(),
+    cwd,
   })
+  process.stderr.write(`opencode container: preparing ${cfg.mode} (image=${cfg.image}, cwd=${cwd})...\n`)
   try {
-    const runtime = await Container.prepare(sessionID, process.cwd(), cfg)
-    const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : process.cwd()
+    const runtime = await Container.prepare(sessionID, cwd, cfg)
+    const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : cwd
     ContainerRegistry.register(directory, runtime)
+    ContainerRegistry.setDiagnostic({
+      status: "succeeded",
+      directory,
+      containerID: runtime.containerID,
+      finishedAt: Date.now(),
+      error: undefined,
+    })
     registerDisposer(async (dir) => {
       if (dir !== directory) return
       ContainerRegistry.unregister(directory)
@@ -87,15 +119,24 @@ async function preBootContainer() {
       container: runtime,
       fn: async () => undefined,
     })
-    Log.Default.info("container runtime ready", {
+    Log.Default.info("preBootContainer: ready", {
       mode: runtime.mode,
       containerID: runtime.containerID,
       directory,
     })
+    process.stderr.write(
+      `opencode container: ready ${runtime.mode} (id=${(runtime.containerID ?? "").slice(0, 12)}, dir=${directory})\n`,
+    )
   } catch (err) {
-    Log.Default.error("container runtime failed to start; continuing without sandbox", {
-      error: err instanceof Error ? err.message : String(err),
+    const message = err instanceof Error ? err.message : String(err)
+    ContainerRegistry.setDiagnostic({
+      status: "failed",
+      error: message,
+      finishedAt: Date.now(),
     })
+    Log.Default.error("preBootContainer: failed; continuing without sandbox", { error: message })
+    process.stderr.write(`opencode container: FAILED — ${message}\n`)
+    process.stderr.write(`opencode container: continuing WITHOUT sandbox (bash will run on the host)\n`)
   }
 }
 await preBootContainer()
