@@ -1618,6 +1618,13 @@ export type McpUnsupportedOAuthError = {
   error: string
 }
 
+export type NotFoundError = {
+  name: "NotFoundError"
+  data: {
+    message: string
+  }
+}
+
 export type EffectHttpApiErrorForbidden = {
   _tag: "Forbidden"
 }
@@ -3281,13 +3288,6 @@ export type BadRequestError = {
   success: false
 }
 
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
-
 export type AuthRemoveData = {
   body?: never
   path: {
@@ -4628,7 +4628,7 @@ export type PtyRemoveData = {
 
 export type PtyRemoveErrors = {
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -4658,7 +4658,7 @@ export type PtyGetData = {
 
 export type PtyGetErrors = {
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -4728,7 +4728,7 @@ export type PtyConnectTokenErrors = {
    */
   403: EffectHttpApiErrorForbidden
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5127,7 +5127,7 @@ export type SessionDeleteErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5161,7 +5161,7 @@ export type SessionGetErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5202,7 +5202,7 @@ export type SessionUpdateErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5328,7 +5328,7 @@ export type SessionMessagesErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5453,7 +5453,7 @@ export type SessionMessageErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5485,6 +5485,15 @@ export type SessionForkData = {
   }
   url: "/session/{sessionID}/fork"
 }
+
+export type SessionForkErrors = {
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionForkError = SessionForkErrors[keyof SessionForkErrors]
 
 export type SessionForkResponses = {
   /**
@@ -5585,7 +5594,7 @@ export type SessionUnshareErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5619,7 +5628,7 @@ export type SessionShareErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -5657,7 +5666,7 @@ export type SessionSummarizeErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -6521,7 +6530,7 @@ export type TuiSelectSessionErrors = {
    */
   400: BadRequestError
   /**
-   * Not found
+   * NotFoundError
    */
   404: NotFoundError
 }
@@ -6714,7 +6723,7 @@ export type ExperimentalWorkspaceRemoveResponse =
 
 export type ExperimentalWorkspaceWarpData = {
   body?: {
-    id: string
+    id: string | null
     sessionID: string
   }
   path?: never
