@@ -12,6 +12,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: github.repository == 'anomalyco/opencode'
     steps:
       - uses: actions/checkout@v3
 
