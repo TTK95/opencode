@@ -5,6 +5,7 @@ import { lazy } from "@/util/lazy"
 import * as Log from "@opencode-ai/core/util/log"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { WorkspaceID } from "@/control-plane/schema"
+import { memoMap } from "@opencode-ai/core/effect/memo-map"
 import { ConfigProvider, Context, Effect, Exit, Layer, Scope } from "effect"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
@@ -280,7 +281,11 @@ async function listenHttpApi(opts: ListenOptions, selection: ServerBackend.Selec
         unknown,
         never
       >
-      const ctx = await Effect.runPromise(Layer.buildWithMemoMap(layer, Layer.makeMemoMapUnsafe(), scope))
+      // Share the global memoMap with AppRuntime so InstanceStore.Service is a
+      // singleton across both. Without this, preBootContainer caches the
+      // container runtime in AppRuntime's store, but HTTP handlers read from a
+      // fresh per-listener store and never see it (path/* returns container=off).
+      const ctx = await Effect.runPromise(Layer.buildWithMemoMap(layer, memoMap, scope))
       return { scope, ctx }
     } catch (err) {
       await Effect.runPromise(Scope.close(scope, Exit.void)).catch(() => undefined)

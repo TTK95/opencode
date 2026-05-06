@@ -3,9 +3,14 @@ import { useTheme } from "../context/theme"
 import { useProject } from "../context/project"
 import { useSync } from "../context/sync"
 import { useRoute } from "../context/route"
+import { Wildcard } from "@/util/wildcard"
 
-const YOLO_RULE = (rule: { permission: string; pattern: string; action: string }) =>
-  rule.permission === "*" && rule.pattern === "*" && rule.action === "allow"
+type Rule = { permission: string; pattern: string; action: string }
+
+function evaluateAction(permission: string, rules: ReadonlyArray<Rule>): string {
+  const match = rules.findLast((r) => Wildcard.match(permission, r.permission) && Wildcard.match("*", r.pattern))
+  return match?.action ?? "ask"
+}
 
 function useContainerMode() {
   const project = useProject()
@@ -19,7 +24,13 @@ function useYoloActive() {
     if (route.data.type !== "session") return false
     const session = sync.session.get(route.data.sessionID)
     if (!session) return false
-    return (session.permission ?? []).some(YOLO_RULE)
+    const rules = (session.permission ?? []) as ReadonlyArray<Rule>
+    if (rules.length === 0) return false
+    // YOLO = the dangerous tools (bash + edit) both effectively resolve to allow.
+    // Just checking for the wildcard rule shape is too loose: a config like
+    //   { "*": "allow", "bash": "ask", "edit": "ask" }
+    // contains the wildcard but is NOT YOLO because later rules override.
+    return evaluateAction("bash", rules) === "allow" && evaluateAction("edit", rules) === "allow"
   })
 }
 
