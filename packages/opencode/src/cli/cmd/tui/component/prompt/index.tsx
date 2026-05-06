@@ -583,7 +583,10 @@ export function Prompt(props: PromptProps) {
           sessionID: props.sessionID,
           permissions: sync.session.get(props.sessionID ?? "")?.permission ?? [],
           update: (input) => sdk.client.session.update(input),
-          sync: (sessionID) => sync.session.sync(sessionID),
+          // Force a re-fetch (bypassing the per-session sync cache) so the
+          // freshly updated permission rules show up in the local store and
+          // the YOLO badge re-evaluates.
+          sync: (sessionID) => sync.session.sync(sessionID, { force: true }),
           toast,
         }),
       },

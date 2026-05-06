@@ -97,7 +97,13 @@ async function preBootContainer() {
   try {
     const runtime = await Container.prepare(sessionID, cwd, cfg)
     const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : cwd
-    ContainerRegistry.register(directory, runtime)
+    // Register under BOTH the host cwd and the agent-side directory.
+    // - host cwd is what the SDK sends as `x-opencode-directory` header, so HTTP
+    //   handlers (e.g. /path) need that key to find the runtime.
+    // - agent-side directory (= copyTempDir for copy, = cwd for mount) is what the
+    //   InstanceStore caches under, so tool execution finds it via Instance.current.
+    ContainerRegistry.register(cwd, runtime)
+    if (directory !== cwd) ContainerRegistry.register(directory, runtime)
     ContainerRegistry.setDiagnostic({
       status: "succeeded",
       directory,
@@ -107,7 +113,8 @@ async function preBootContainer() {
     })
     registerDisposer(async (dir) => {
       if (dir !== directory) return
-      ContainerRegistry.unregister(directory)
+      ContainerRegistry.unregister(cwd)
+      if (directory !== cwd) ContainerRegistry.unregister(directory)
       try {
         await runtime.destroy()
       } catch (err) {

@@ -42,6 +42,9 @@ export const StatusMap = Schema.Record(Schema.String, SessionStatus.Info)
 export const UpdatePayload = Schema.Struct({
   title: Schema.optional(Schema.String),
   permission: Schema.optional(Permission.Ruleset),
+  // "replace" overwrites stored rules; "merge" (default) appends. /yolo toggle
+  // needs "replace" to clear the wildcard rule on disable.
+  permissionMode: Schema.optional(Schema.Literals(["merge", "replace"])),
   time: Schema.optional(
     Schema.Struct({
       archived: Schema.optional(Session.ArchivedTimestamp),
