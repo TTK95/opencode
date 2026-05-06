@@ -51,14 +51,34 @@ async function cleanupWorktree(baseDir: string, wt: Worktree): Promise<{ clean: 
   const status = await git(wt.dir, ["status", "--porcelain"])
   const clean = status.code === 0 && status.stdout.trim() === ""
   if (!clean) return { clean: false, removed: false }
+
+  let removed = false
   const remove = await git(baseDir, ["worktree", "remove", wt.dir])
-  if (remove.code !== 0) {
-    // Fallback — force remove so we don't leak tmp dirs, but report it
-    await git(baseDir, ["worktree", "remove", "--force", wt.dir])
-    await fs.rm(wt.dir, { recursive: true, force: true }).catch(() => {})
+  if (remove.code === 0) {
+    removed = true
+  } else {
+    const force = await git(baseDir, ["worktree", "remove", "--force", wt.dir])
+    if (force.code === 0) {
+      removed = true
+    } else {
+      // Last resort: nuke the directory ourselves and tell git to prune the
+      // dangling worktree pointer. Treated as success only if rm + prune both
+      // worked; otherwise the caller will see removed=false and surface the
+      // path so the user can clean up manually.
+      try {
+        await fs.rm(wt.dir, { recursive: true, force: true })
+        const prune = await git(baseDir, ["worktree", "prune"])
+        removed = prune.code === 0
+      } catch {
+        removed = false
+      }
+    }
   }
-  await git(baseDir, ["branch", "-D", wt.branch]).catch(() => undefined)
-  return { clean: true, removed: true }
+
+  if (removed) {
+    await git(baseDir, ["branch", "-D", wt.branch]).catch(() => undefined)
+  }
+  return { clean: true, removed }
 }
 
 export interface TaskPromptOps {
@@ -190,6 +210,17 @@ export const TaskTool = Tool.define(
         params.isolation === "worktree" && !session
           ? yield* Effect.promise(() => createWorktree(Instance.directory, next.name))
           : undefined
+
+      // Caller explicitly requested worktree isolation — fail rather than
+      // silently degrade to running against the primary checkout. Common cause:
+      // not a git repository, or `git worktree add` failed (see logs).
+      if (params.isolation === "worktree" && !session && !worktree) {
+        return yield* Effect.fail(
+          new Error(
+            "Failed to create worktree for isolation. The directory must be a git repository and `git worktree add` must succeed.",
+          ),
+        )
+      }
 
       const promptText =
         worktree === undefined
