@@ -15,6 +15,7 @@ import { ensureProcessMetadata } from "@opencode-ai/core/util/opencode-process"
 import { Effect } from "effect"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 import { Container } from "@/container"
+import { ContainerRegistry } from "@/container/registry"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { registerDisposer } from "@/effect/instance-registry"
 import { ulid } from "ulid"
@@ -71,8 +72,10 @@ async function preBootContainer() {
   try {
     const runtime = await Container.prepare(sessionID, process.cwd(), cfg)
     const directory = runtime.mode === "copy" && runtime.copyTempDir ? runtime.copyTempDir : process.cwd()
+    ContainerRegistry.register(directory, runtime)
     registerDisposer(async (dir) => {
       if (dir !== directory) return
+      ContainerRegistry.unregister(directory)
       try {
         await runtime.destroy()
       } catch (err) {

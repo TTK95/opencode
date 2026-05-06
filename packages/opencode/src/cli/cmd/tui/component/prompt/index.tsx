@@ -48,6 +48,7 @@ import { useArgs } from "@tui/context/args"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { WorkspaceLabel, type WorkspaceStatus } from "../workspace-label"
 import { createYoloCommandOption } from "./yolo"
+import { evaluateAction } from "../runtime-state"
 
 export type PromptProps = {
   sessionID?: string
@@ -588,7 +589,7 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Container",
-        description: "Show the current container sandbox mode",
+        description: "Show container sandbox mode + session permission rules",
         value: "session.container",
         category: "Session",
         slash: {
@@ -598,14 +599,25 @@ export function Prompt(props: PromptProps) {
           const info = project.instance.path().container
           const mode = info?.mode ?? "off"
           const image = info?.image ?? ""
-          const message =
-            mode === "off"
-              ? "Container sandbox: off — bash/edit run on the host. Restart with `opencode --container mount` or `--container copy` to sandbox."
-              : `Container sandbox: ${mode}${image ? ` (image: ${image})` : ""}. Bash/edit calls run inside Docker.`
+          const sid = props.sessionID
+          const session = sid ? sync.session.get(sid) : undefined
+          const rules = (session?.permission ?? []) as Array<{
+            permission: string
+            pattern: string
+            action: string
+          }>
+          const dump =
+            rules.length === 0 ? "(none)" : rules.map((r) => `${r.permission}|${r.pattern}=${r.action}`).join(", ")
+          const effBash = evaluateAction("bash", rules)
+          const effEdit = evaluateAction("edit", rules)
+          const containerLine = `container: ${mode}${image ? ` (${image})` : ""}`
+          const sessionLine = `session: ${sid ?? "(none)"}`
+          const rulesLine = `rules: ${dump}`
+          const effectiveLine = `effective: bash=${effBash} edit=${effEdit}`
           toast.show({
             variant: mode === "off" ? "info" : "warning",
-            message,
-            duration: 6000,
+            message: [containerLine, sessionLine, rulesLine, effectiveLine].join("\n"),
+            duration: 12000,
           })
         },
       },

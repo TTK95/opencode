@@ -1,5 +1,6 @@
 import { Agent } from "@/agent/agent"
 import { Command } from "@/command"
+import { ContainerRegistry } from "@/container/registry"
 import * as InstanceState from "@/effect/instance-state"
 import { Format } from "@/format"
 import { Global } from "@opencode-ai/core/global"
@@ -27,7 +28,10 @@ export const instanceHandlers = HttpApiBuilder.group(InstanceHttpApi, "instance"
 
     const getPath = Effect.fn("InstanceHttpApi.path")(function* () {
       const ctx = yield* InstanceState.context
-      const runtime = ctx.container
+      // Fallback to the worker-process registry if InstanceContext doesn't carry
+      // the container — happens when this handler runs through a different
+      // InstanceStore.Service instance than the one preBootContainer populated.
+      const runtime = ctx.container ?? ContainerRegistry.lookup(ctx.directory)
       return {
         home: Global.Path.home,
         state: Global.Path.state,
