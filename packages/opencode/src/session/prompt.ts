@@ -1446,7 +1446,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           )
 
         return yield* loop({ sessionID: input.sessionID }).pipe(
-          Effect.tap((result) => stop(result.info.id, false)),
+          Effect.tap((result) => stop(result.info.id, false).pipe(Effect.ignore)),
           Effect.tapError(() => stop(message.info.id, true).pipe(Effect.ignore)),
         )
       },

@@ -122,11 +122,26 @@ export async function remove(containerID: string): Promise<void> {
 }
 
 export async function sweepStale(label: string): Promise<number> {
-  const ls = await run("docker", ["ps", "-aq", "--filter", `label=${label}`])
+  // Only target containers that are no longer running. Filters with the same
+  // key are OR'd by Docker, so this lists `created | exited | dead` matching
+  // the label — concurrent sandboxes (running/paused/restarting) are skipped
+  // so a new session can't terminate live ones in other terminals.
+  const ls = await run("docker", [
+    "ps",
+    "-aq",
+    "--filter",
+    `label=${label}`,
+    "--filter",
+    "status=exited",
+    "--filter",
+    "status=dead",
+    "--filter",
+    "status=created",
+  ])
   if (ls.code !== 0) return 0
   const ids = ls.stdout.split("\n").map((x) => x.trim()).filter(Boolean)
   if (ids.length === 0) return 0
-  const rm = await run("docker", ["rm", "-f", ...ids])
+  const rm = await run("docker", ["rm", ...ids])
   if (rm.code !== 0) {
     log.warn("sweep rm failed", { stderr: rm.stderr.trim().slice(0, 200) })
     return 0
