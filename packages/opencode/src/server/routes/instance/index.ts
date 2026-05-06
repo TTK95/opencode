@@ -4,6 +4,7 @@ import type { UpgradeWebSocket } from "hono/ws"
 import { Context, Effect } from "effect"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import z from "zod"
+import { ContainerRegistry } from "@/container/registry"
 import { Format } from "@/format"
 import { TuiRoutes } from "./tui"
 import { Instance } from "@/project/instance"
@@ -213,6 +214,25 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket, opts?: CorsOptions): H
                       config: z.string(),
                       worktree: z.string(),
                       directory: z.string(),
+                      container: z.object({
+                        mode: z.enum(["off", "mount", "copy"]),
+                        image: z.string(),
+                        diagnostic: z.object({
+                          status: z.enum([
+                            "not-attempted",
+                            "skipped-no-env",
+                            "skipped-off",
+                            "preparing",
+                            "succeeded",
+                            "failed",
+                          ]),
+                          envValue: z.string(),
+                          error: z.string(),
+                          cwd: z.string(),
+                          directory: z.string(),
+                          containerID: z.string(),
+                        }),
+                      }),
                     })
                     .meta({
                       ref: "Path",
@@ -224,12 +244,29 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket, opts?: CorsOptions): H
         },
       }),
       async (c) => {
+        // Mirror the HttpApi handler: prefer the InstanceContext's container,
+        // fall back to the worker-process registry. See registry.ts.
+        const ctx = Instance.current
+        const runtime = ctx.container ?? ContainerRegistry.lookup(ctx.directory)
+        const diag = ContainerRegistry.getDiagnostic()
         return c.json({
           home: Global.Path.home,
           state: Global.Path.state,
           config: Global.Path.config,
           worktree: Instance.worktree,
           directory: Instance.directory,
+          container: {
+            mode: (runtime?.mode ?? "off") as "off" | "mount" | "copy",
+            image: runtime && runtime.mode !== "off" ? runtime.config.image : "",
+            diagnostic: {
+              status: diag.status,
+              envValue: diag.envValue ?? "",
+              error: diag.error ?? "",
+              cwd: diag.cwd,
+              directory: diag.directory ?? "",
+              containerID: diag.containerID ?? "",
+            },
+          },
         })
       },
     )
