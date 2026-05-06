@@ -198,7 +198,9 @@ In `off` mode, `spawnArgs` returns a normal local spawn (Windows PowerShell hand
 
 ## Permission integration
 
-`packages/opencode/src/session/prompt.ts:sandboxRuleset()` prepends `allow: *` rules for `bash`, `edit`, and `external_directory` whenever `Instance.current.container.mode !== "off"`. Reasoning: if the container is sandbox enough, the per-tool permission prompts add friction without adding safety — the container is the safety. Prepended (not appended) so user-defined agent/session rules later in the array still override via `findLast()` semantics in `evaluate.ts`. Without container, behavior is unchanged.
+`packages/opencode/src/session/prompt.ts:sandboxRuleset()` prepends `allow: *` rules for `bash` and `edit` whenever `Instance.current.container.mode !== "off"`. Reasoning: those actions execute inside the container, so per-call permission prompts add friction without adding safety — the container is the safety. Prepended (not appended) so user-defined agent/session rules later in the array still override via `findLast()` semantics in `evaluate.ts`. Without container, behavior is unchanged.
+
+`external_directory` is **deliberately not auto-allowed** even in container mode. `Read`/`Glob`/`Grep`/`Edit`/`Write` all call `assertExternalDirectory` against host paths *before* any container hop, and they use Node's host-side `fs`. Auto-allowing the permission would let host-fs tools quietly escape the project boundary — defeating copy-mode isolation in particular. So out-of-project reads always go through the normal permission prompt unless the user explicitly allows them (config rule, "always" approval, or `/yolo`).
 
 ---
 
@@ -206,7 +208,7 @@ In `off` mode, `spawnArgs` returns a normal local spawn (Windows PowerShell hand
 
 - **The agent process itself** — model calls, MCP servers, file reads via `Read` tool (those use Node's `fs`, not bash), git operations done via the CLI agent's own internal git module rather than shelling out, etc.
 - **The TUI** — runs on the host.
-- **Reads through `Read`/`Glob`/`Grep` tools** — these go through host-side fs APIs against the cwd. In `mount` mode they read the same files the container sees. In `copy` mode they read the *temp copy* (because the instance directory is the copy), so they stay consistent with what tools see.
+- **Reads through `Read`/`Glob`/`Grep` tools** — these go through host-side fs APIs against the cwd. In `mount` mode they read the same files the container sees. In `copy` mode they read the *temp copy* (because the instance directory is the copy), so they stay consistent with what tools see. **Reads outside the instance directory are gated by the `external_directory` permission** — they prompt the user (or fail per config) just like in `off` mode, regardless of container state.
 - **Network operations done by the model itself** (web search, MCP HTTP calls) — those happen in the host process.
 
 So the boundary is exactly: **anything spawned via shell/background → containerized; everything else → host.**

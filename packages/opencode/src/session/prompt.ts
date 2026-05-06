@@ -79,11 +79,17 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 const log = Log.create({ service: "session.prompt" })
 const elog = EffectLogger.create({ service: "session.prompt" })
 
-// When the instance is bound to a Docker sandbox, file/shell tools execute
-// inside the container, so prompting the user for each command is noise. Yield
-// an "allow" rule for the affected permissions; user-configured agent/session
-// rules merge after these, so an explicit deny still wins.
-const SANDBOX_PERMISSIONS = ["bash", "external_directory", "edit"] as const
+// When the instance is bound to a Docker sandbox, bash + edit execute inside
+// the container, so prompting the user for each command is noise. Yield "allow"
+// rules for them; user-configured agent/session rules merge after these, so an
+// explicit deny still wins.
+//
+// external_directory is intentionally NOT included: Read/Glob/Grep/Edit/Write
+// all check assertExternalDirectory before touching paths outside the instance
+// directory, and they run on the HOST filesystem regardless of container mode.
+// Auto-allowing external_directory would silently let host-fs tools escape the
+// project boundary — defeating copy-mode isolation in particular.
+const SANDBOX_PERMISSIONS = ["bash", "edit"] as const
 function sandboxRuleset(): Permission.Ruleset {
   let runtime
   try {

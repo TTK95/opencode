@@ -198,7 +198,9 @@ Im `off`-Modus liefert `spawnArgs` ein normales lokales Spawn (inklusive Windows
 
 ## Permission-Integration
 
-`packages/opencode/src/session/prompt.ts:sandboxRuleset()` stellt `allow: *`-Regeln für `bash`, `edit` und `external_directory` voran, sobald `Instance.current.container.mode !== "off"`. Begründung: ist der Container Sandbox genug, addieren die Per-Tool-Permission-Prompts Reibung ohne zusätzliche Sicherheit — der Container *ist* die Sicherheit. Die Regeln werden vorangestellt (nicht angehängt), damit benutzerdefinierte Agent-/Session-Regeln später im Array über die `findLast()`-Semantik in `evaluate.ts` weiter überschreiben können. Ohne Container ändert sich das Verhalten nicht.
+`packages/opencode/src/session/prompt.ts:sandboxRuleset()` stellt `allow: *`-Regeln für `bash` und `edit` voran, sobald `Instance.current.container.mode !== "off"`. Begründung: diese Aktionen laufen im Container, daher addieren Per-Call-Permission-Prompts Reibung ohne zusätzliche Sicherheit — der Container *ist* die Sicherheit. Die Regeln werden vorangestellt (nicht angehängt), damit benutzerdefinierte Agent-/Session-Regeln später im Array über die `findLast()`-Semantik in `evaluate.ts` weiter überschreiben können. Ohne Container ändert sich das Verhalten nicht.
+
+`external_directory` wird **bewusst nicht auto-allowed**, auch im Container-Modus nicht. `Read`/`Glob`/`Grep`/`Edit`/`Write` rufen vor jedem Container-Hop `assertExternalDirectory` gegen Host-Pfade auf und nutzen Nodes host-seitiges `fs`. Würde die Permission auto-allowed, könnten Host-fs-Tools die Projektgrenze leise verlassen — und das würde gerade die Copy-Modus-Isolation aushebeln. Out-of-Project-Reads gehen daher immer durch den normalen Permission-Prompt, sofern der User sie nicht explizit erlaubt (Config-Regel, "Always"-Approval oder `/yolo`).
 
 ---
 
@@ -206,7 +208,7 @@ Im `off`-Modus liefert `spawnArgs` ein normales lokales Spawn (inklusive Windows
 
 - **Der Agent-Prozess selbst** — Modell-Calls, MCP-Server, Datei-Reads via `Read`-Tool (verwenden Nodes `fs`, kein Bash), Git-Operationen über das interne Git-Modul des CLI-Agents statt Shell-Calls usw.
 - **Die TUI** — läuft auf dem Host.
-- **Reads via `Read`/`Glob`/`Grep`-Tool** — nutzen host-seitige fs-APIs gegen das cwd. Im `mount`-Modus lesen sie dieselben Dateien, die der Container sieht. Im `copy`-Modus lesen sie die *Temp-Kopie* (weil das Instance-Verzeichnis die Kopie ist), bleiben also konsistent zu dem, was die Tools sehen.
+- **Reads via `Read`/`Glob`/`Grep`-Tool** — nutzen host-seitige fs-APIs gegen das cwd. Im `mount`-Modus lesen sie dieselben Dateien, die der Container sieht. Im `copy`-Modus lesen sie die *Temp-Kopie* (weil das Instance-Verzeichnis die Kopie ist), bleiben also konsistent zu dem, was die Tools sehen. **Reads außerhalb des Instance-Verzeichnisses sind durch die `external_directory`-Permission gegated** — sie fragen den User (oder schlagen fehl, je nach Config) genauso wie im `off`-Modus, unabhängig vom Container-Status.
 - **Netzwerkoperationen, die das Modell selbst macht** (Web-Search, MCP-HTTP-Calls) — laufen im Host-Prozess.
 
 Die Grenze ist also exakt: **alles, was per Shell/Background gespawnt wird → containerisiert; alles andere → Host.**
