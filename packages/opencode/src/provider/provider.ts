@@ -1532,13 +1532,17 @@ const layer: Layer.Layer<
               message: formatGateMessage(model.providerID, gate),
             })
           }
-          RateLimit.tick(model.providerID, estimate)
           const res = await fetchFn(input, {
             ...opts,
             // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
             timeout: false,
           })
 
+          // Tick only after the request was actually dispatched. DNS/TLS/abort
+          // failures throw before this point and must not count against the
+          // local limiter — otherwise a transient outage self-throttles
+          // recovery attempts even though the provider never saw the calls.
+          RateLimit.tick(model.providerID, estimate)
           RateLimit.recordResponse(model.providerID, res.headers)
 
           if (!chunkAbortCtl) return res
