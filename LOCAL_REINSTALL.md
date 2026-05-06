@@ -2,13 +2,23 @@
 
 How to rebuild local opencode and apply changes to the global `opencode` command.
 
+## Version scheme
+
+Fork versions follow `<synced-upstream>-ttk.<counter>`:
+
+- **Anchor**: the `version` field of upstream's `packages/opencode/package.json` we last merged into `dev`. Today: `1.14.39`.
+- **Counter**: increments per ship-worthy fork release (not per dev iteration). `1.14.39-ttk.0`, `1.14.39-ttk.1`, …
+- **Reset on upstream sync**: when a `git merge upstream/dev` advances the upstream anchor to e.g. `1.14.40`, fork resets to `1.14.40-ttk.0`.
+
+Semver-valid (the underscore-suffix scheme used previously was not). Pre-release sorts BELOW the corresponding upstream stable — intentional: signals "this fork builds on top of upstream X but isn't upstream X itself".
+
 ## One-time setup
 
 The global `opencode` command is installed via a symlinked local build:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.28-dev_ttk OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
+OPENCODE_VERSION=1.14.39-ttk.0 OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
 npm install -g packages/opencode/dist/opencode-windows-x64
 ```
 
@@ -20,7 +30,7 @@ After editing source:
 
 ```bash
 cd C:/Users/tte/Projects/opencode
-OPENCODE_VERSION=1.14.28-dev_ttk OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
+OPENCODE_VERSION=1.14.39-ttk.0 OPENCODE_CHANNEL=dev_ttk OPENCODE_REPO=TTK95/opencode bun run build --single
 ```
 
 Close any running opencode TUI sessions and launch a fresh one. The symlink points at `dist/`, so the new binary is picked up automatically.

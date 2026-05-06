@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "1.14.47-dev_ttk",
+  "version": "1.14.39-ttk.0",
   "name": "opencode",
   "type": "module",
   "license": "MIT",

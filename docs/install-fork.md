@@ -4,7 +4,7 @@ How to install the fork-channel build of opencode (`OPENCODE_CHANNEL=dev_ttk`).
 Covers **Windows** (validated) and **Linux** (untested — source build only).
 
 > **Note**: macOS is not covered. The release pipeline today only builds `windows-x64`; Linux works in principle from source but is unverified by the maintainer.
-> Generated 2026-05-05 against `dev` @ `e9f49205f` (opencode `1.14.41-dev_ttk`).
+> Generated 2026-05-06; fork uses the version scheme `<synced-upstream>-ttk.<counter>`; latest tag is whatever `gh release view --repo TTK95/opencode` returns.
 
 ---
 
@@ -85,10 +85,10 @@ Expand-Archive -Path "$env:TEMP\opencode-windows-x64.zip" -DestinationPath "$dst
 
 ```powershell
 opencode --version
-# expect:  1.14.41-dev_ttk   (or whatever the latest fork release is)
+# expect:  1.14.39-ttk.0   (or whatever the latest fork release is)
 ```
 
-If the version *doesn't* end in `-dev_ttk`, the launcher is finding a stale upstream binary. See **Troubleshooting** below.
+If the version *doesn't* contain `-ttk.`, the launcher is finding a stale upstream binary. See **Troubleshooting** below.
 
 ### 5. Updating
 
@@ -98,7 +98,9 @@ Once you're on a fork release, in-app upgrade works:
 opencode upgrade --method github-release
 ```
 
-This routes through the fork channel and pulls the next release from `TTK95/opencode/releases/latest`. The Windows-specific lock-file handling (rename-aside + post-verify) was fixed in `1.14.41`, so upgrades from that version forward replace the running binary cleanly.
+This routes through the fork channel and pulls the next release from `TTK95/opencode/releases/latest`. The Windows-specific lock-file handling (rename-aside + post-verify) is in place since `1.14.39-ttk.0`, so upgrades replace the running binary cleanly.
+
+> **Caveat — first install on a new version scheme**: the previous fork scheme (`1.14.X-dev_ttk`) was not semver-valid, so `semver.gt()`-based upgrade detection cannot compare it to `1.14.39-ttk.0`. If you're coming from a `-dev_ttk` build, do one manual install (download the zip from the release page and unzip into the npm-global location). Subsequent `1.14.39-ttk.1`, `.2`, … upgrades work normally.
 
 > If a TUI session is running while you upgrade, close it first. The upgrade renames the running `.exe` aside before extracting; the running session keeps working until exit, but the next launch picks up the new build.
 
@@ -183,7 +185,7 @@ This bypasses the npm shim entirely. Faster, but means `opencode upgrade --metho
 
 ```bash
 opencode --version
-# expect:  1.14.41-dev_ttk
+# expect:  1.14.39-ttk.0
 ```
 
 ### 7. Updating
@@ -212,7 +214,7 @@ Optionally remove the cloned repo: `rm -rf opencode`.
 
 ## Troubleshooting
 
-### `opencode --version` shows an upstream version (no `-dev_ttk` suffix)
+### `opencode --version` shows an upstream version (no `-ttk.` segment)
 
 The launcher (`opencode-ai`'s Node dispatcher) is finding a stale binary before the fork build. Common causes:
 
@@ -231,7 +233,7 @@ The launcher (`opencode-ai`'s Node dispatcher) is finding a stale binary before 
 
 ### `opencode upgrade --method github-release` reports success but version doesn't change (Windows)
 
-Fixed in `1.14.41`. If you're on `1.14.40` or older fork builds, do **one** manual install per the steps above to get to `1.14.41`; future upgrades will work cleanly.
+Fixed in `1.14.39-ttk.0`. If you're on a `-dev_ttk` build, do **one** manual install per the steps above to get to `1.14.39-ttk.0`; future upgrades will work cleanly.
 
 ### Container mode silently runs without a sandbox
 
@@ -258,7 +260,7 @@ Build-time env vars baked into the binary (set automatically by the release work
 Setting these manually for a custom build:
 
 ```bash
-OPENCODE_VERSION=1.14.41-dev_ttk \
+OPENCODE_VERSION=1.14.39-ttk.0 \
 OPENCODE_CHANNEL=dev_ttk \
 OPENCODE_REPO=TTK95/opencode \
   bun run --cwd packages/opencode build --single
