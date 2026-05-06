@@ -15,6 +15,7 @@ import { Provider } from "@/provider/provider"
 import { Agent } from "../../agent/agent"
 import { Permission } from "../../permission"
 import { Tool } from "@/tool/tool"
+import { Instance } from "../../project/instance"
 import { GlobTool } from "../../tool/glob"
 import { GrepTool } from "../../tool/grep"
 import { ReadTool } from "../../tool/read"
@@ -686,7 +687,15 @@ export const RunCommand = effectCmd({
             const request = new Request(input, init)
             return Server.Default().app.fetch(request)
           }) as typeof globalThis.fetch
-          const sdk = createOpencodeClient({ baseUrl: "http://opencode.internal", fetch: fetchFn })
+          // Pin the SDK client to the bootstrapped instance directory so the
+          // server middleware routes requests to the bound instance instead of
+          // falling back to process.cwd(). In container copy mode this is the
+          // temp workspace, so omitting it would silently bypass isolation.
+          const sdk = createOpencodeClient({
+            baseUrl: "http://opencode.internal",
+            directory: Instance.directory,
+            fetch: fetchFn,
+          })
           await execute(sdk)
         },
         { container: containerOverride },

@@ -202,6 +202,11 @@ export const TaskTool = Tool.define(
               params.prompt,
             ].join("\n")
 
+      // Track success-path cleanup so the release callback only runs cleanup
+      // when the use-callback failed/aborted/was interrupted before reaching it.
+      let cleanupAttempted = false
+      const instanceDir = Instance.directory
+
       return yield* Effect.acquireUseRelease(
         Effect.sync(() => {
           ctx.abort.addEventListener("abort", onAbort)
@@ -227,7 +232,8 @@ export const TaskTool = Tool.define(
 
             let worktreeNote = ""
             if (worktree) {
-              const { clean, removed } = yield* Effect.promise(() => cleanupWorktree(Instance.directory, worktree))
+              cleanupAttempted = true
+              const { clean, removed } = yield* Effect.promise(() => cleanupWorktree(instanceDir, worktree))
               worktreeNote = removed
                 ? `\n(worktree ${worktree.dir} was clean and has been removed; branch ${worktree.branch} deleted)`
                 : `\n(worktree ${worktree.dir} left in place on branch \`${worktree.branch}\` — it contains ${clean ? "no" : "uncommitted"} changes; remove manually with \`git worktree remove${clean ? "" : " --force"} ${worktree.dir}\`)`
@@ -254,6 +260,12 @@ export const TaskTool = Tool.define(
         (_, exit) =>
           Effect.gen(function* () {
             if (Exit.hasInterrupts(exit)) yield* cancel
+            if (worktree && !cleanupAttempted) {
+              // Best-effort cleanup so failed/aborted task runs don't leak
+              // temp worktrees or branches. Errors are swallowed because the
+              // user already saw the task failure.
+              yield* Effect.promise(() => cleanupWorktree(instanceDir, worktree)).pipe(Effect.ignore)
+            }
           }).pipe(
             Effect.ensuring(
               Effect.sync(() => {
