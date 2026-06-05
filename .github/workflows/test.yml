@@ -88,12 +88,17 @@ jobs:
 
   e2e:
     name: e2e (${{ matrix.settings.name }})
+    # Upstream only: the Playwright browser install hangs indefinitely on
+    # GitHub-hosted runners (tried bunx and npx); only validated on Blacksmith.
+    if: github.repository == 'anomalyco/opencode'
     strategy:
       fail-fast: false
       matrix:
-        # Forks run linux-only on GitHub-hosted runners; the windows matrix
-        # assumes upstream's Blacksmith runner environment.
-        settings: ${{ github.repository == 'anomalyco/opencode' && fromJSON('[{"name":"linux","host":"blacksmith-4vcpu-ubuntu-2404"},{"name":"windows","host":"blacksmith-4vcpu-windows-2025"}]') || fromJSON('[{"name":"linux","host":"ubuntu-24.04"}]') }}
+        settings:
+          - name: linux
+            host: blacksmith-4vcpu-ubuntu-2404
+          - name: windows
+            host: blacksmith-4vcpu-windows-2025
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -135,9 +140,7 @@ jobs:
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: packages/app
-        # npx instead of bunx: bunx's browser download hangs indefinitely on
-        # GitHub-hosted runners (observed 40+ min); node is set up above.
-        run: npx playwright install chromium
+        run: bunx playwright install chromium
 
       - name: Run app e2e tests
         run: bun --cwd packages/app test:e2e:local
