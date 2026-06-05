@@ -1,5 +1,4 @@
 import { cmd } from "@/cli/cmd/cmd"
-import { tui } from "./app"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import path from "path"
@@ -14,7 +13,6 @@ import type { GlobalEvent } from "@opencode-ai/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { writeHeapSnapshot } from "v8"
-import { TuiConfig } from "./config/tui"
 import {
   OPENCODE_PROCESS_ROLE,
   OPENCODE_RUN_ID,
@@ -128,10 +126,14 @@ export const TuiThreadCommand = cmd({
         describe: "Docker image used for the sandbox container (defaults to node:22-alpine)",
       }),
   handler: async (args) => {
+<<<<<<< HEAD
     if (args.yolo) process.env.OPENCODE_YOLO = "true"
     if (args.container !== undefined) process.env.OPENCODE_CONTAINER = args.container as string
     if (args["container-image"] !== undefined)
       process.env.OPENCODE_CONTAINER_IMAGE = args["container-image"] as string
+=======
+    const { TuiConfig } = await import("./config/tui")
+>>>>>>> upstream/dev
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)
     const unguard = win32InstallCtrlCGuard()
@@ -247,8 +249,11 @@ export const TuiThreadCommand = cmd({
       }, 1000).unref?.()
 
       try {
-        await tui({
+        const { createTuiRenderer, tui } = await import("./app")
+        const renderer = await createTuiRenderer(config)
+        const handle = tui({
           url: transport.url,
+          renderer,
           async onSnapshot() {
             const tui = writeHeapSnapshot("tui.heapsnapshot")
             const server = await client.call("snapshot", undefined)
@@ -267,6 +272,7 @@ export const TuiThreadCommand = cmd({
             fork: args.fork,
           },
         })
+        await handle.done
       } finally {
         await stop()
       }
