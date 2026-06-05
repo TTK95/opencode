@@ -135,7 +135,9 @@ jobs:
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: packages/app
-        run: bunx playwright install chromium
+        # npx instead of bunx: bunx's browser download hangs indefinitely on
+        # GitHub-hosted runners (observed 40+ min); node is set up above.
+        run: npx playwright install chromium
 
       - name: Run app e2e tests
         run: bun --cwd packages/app test:e2e:local
