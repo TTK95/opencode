@@ -405,7 +405,7 @@ jobs:
       - build-cli
       - sign-cli-windows
       - build-electron
-    if: always() && !failure() && !cancelled()
+    if: always() && !failure() && !cancelled() && github.repository == 'anomalyco/opencode'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v3
