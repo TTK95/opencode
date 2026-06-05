@@ -93,7 +93,25 @@ function createGlobalSync() {
     session_todo: {},
     provider_auth: {},
     get path() {
-      const EMPTY = { state: "", config: "", worktree: "", directory: "", home: "" }
+      const EMPTY = {
+        state: "",
+        config: "",
+        worktree: "",
+        directory: "",
+        home: "",
+        container: {
+          mode: "off" as const,
+          image: "",
+          diagnostic: {
+            status: "not-attempted" as const,
+            envValue: "",
+            error: "",
+            cwd: "",
+            directory: "",
+            containerID: "",
+          },
+        },
+      }
       if (pathQuery.isLoading) return EMPTY
       return pathQuery.data ?? EMPTY
     },

@@ -202,7 +202,25 @@ export function createChildStoreManager(input: {
             config: {},
             get path() {
               if (pathQuery.isLoading || !pathQuery.data)
-                return { state: "", config: "", worktree: "", directory: "", home: "" }
+                return {
+                  state: "",
+                  config: "",
+                  worktree: "",
+                  directory: "",
+                  home: "",
+                  container: {
+                    mode: "off" as const,
+                    image: "",
+                    diagnostic: {
+                      status: "not-attempted" as const,
+                      envValue: "",
+                      error: "",
+                      cwd: "",
+                      directory: "",
+                      containerID: "",
+                    },
+                  },
+                }
               return pathQuery.data
             },
             status: "loading" as const,
