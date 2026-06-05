@@ -236,7 +236,10 @@ export const TaskTool = Tool.define(
       // Track success-path cleanup so the release callback only runs cleanup
       // when the use-callback failed/aborted/was interrupted before reaching it.
       let cleanupAttempted = false
-      const instanceDir = Instance.directory
+      // Snapshot the instance dir for the release callback (which runs outside
+      // the instance ALS context) — but only when a worktree exists; eager
+      // access throws in contexts without an active instance (e.g. tests).
+      const instanceDir = worktree === undefined ? undefined : Instance.directory
 
       return yield* Effect.acquireUseRelease(
         Effect.sync(() => {
@@ -262,7 +265,7 @@ export const TaskTool = Tool.define(
             })
 
             let worktreeNote = ""
-            if (worktree) {
+            if (worktree && instanceDir !== undefined) {
               cleanupAttempted = true
               const { clean, removed } = yield* Effect.promise(() => cleanupWorktree(instanceDir, worktree))
               worktreeNote = removed
@@ -291,7 +294,7 @@ export const TaskTool = Tool.define(
         (_, exit) =>
           Effect.gen(function* () {
             if (Exit.hasInterrupts(exit)) yield* cancel
-            if (worktree && !cleanupAttempted) {
+            if (worktree && instanceDir !== undefined && !cleanupAttempted) {
               // Best-effort cleanup so failed/aborted task runs don't leak
               // temp worktrees or branches. Errors are swallowed because the
               // user already saw the task failure.
