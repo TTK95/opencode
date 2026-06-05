@@ -14,6 +14,7 @@ permissions:
 jobs:
   close-non-compliant:
     runs-on: ubuntu-latest
+    if: github.repository == 'anomalyco/opencode'
     steps:
       - name: Close non-compliant issues and PRs after 2 hours
         uses: actions/github-script@v7

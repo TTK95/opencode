@@ -8,6 +8,7 @@ on:
 jobs:
   close:
     runs-on: ubuntu-latest
+    if: github.repository == 'anomalyco/opencode'
     permissions:
       contents: read
       issues: write

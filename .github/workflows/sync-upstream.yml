@@ -7,6 +7,12 @@ name: Sync Upstream
 #
 # Runs weekly and on manual dispatch. Never pushes directly to dev — the PR
 # requires human approval.
+#
+# Needs the SYNC_TOKEN secret (fine-grained PAT, Contents + Workflows
+# read/write on this repo) to push merges that touch .github/workflows —
+# GitHub hard-rejects such pushes from the default GITHUB_TOKEN. Falls back
+# to GITHUB_TOKEN when the secret is missing (sync then fails only when
+# upstream changed a workflow file).
 
 on:
   schedule:
@@ -36,7 +42,7 @@ jobs:
         with:
           ref: ${{ env.BASE_BRANCH }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
