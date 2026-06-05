@@ -26,11 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        settings:
-          - name: linux
-            host: ${{ github.repository == 'anomalyco/opencode' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
-          - name: windows
-            host: ${{ github.repository == 'anomalyco/opencode' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
+        # Forks run linux-only on GitHub-hosted runners; the windows matrix
+        # assumes upstream's Blacksmith runner environment.
+        settings: ${{ github.repository == 'anomalyco/opencode' && fromJSON('[{"name":"linux","host":"blacksmith-4vcpu-ubuntu-2404"},{"name":"windows","host":"blacksmith-4vcpu-windows-2025"}]') || fromJSON('[{"name":"linux","host":"ubuntu-24.04"}]') }}
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
@@ -93,11 +91,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        settings:
-          - name: linux
-            host: ${{ github.repository == 'anomalyco/opencode' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
-          - name: windows
-            host: ${{ github.repository == 'anomalyco/opencode' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025' }}
+        # Forks run linux-only on GitHub-hosted runners; the windows matrix
+        # assumes upstream's Blacksmith runner environment.
+        settings: ${{ github.repository == 'anomalyco/opencode' && fromJSON('[{"name":"linux","host":"blacksmith-4vcpu-ubuntu-2404"},{"name":"windows","host":"blacksmith-4vcpu-windows-2025"}]') || fromJSON('[{"name":"linux","host":"ubuntu-24.04"}]') }}
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
