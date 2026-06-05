@@ -41,6 +41,10 @@ Output: Creates directory 'foo'"
 ,
       "type": "string",
     },
+    "run_in_background": {
+      "description": "Set to true to run the command in the background. Returns a shell_id immediately while the process keeps running. Read incremental output with the bash_output tool and terminate with kill_shell. Use for long-running processes (dev servers, watchers, log tails) that you do not want to block on.",
+      "type": "boolean",
+    },
     "timeout": {
       "description": "Optional timeout in milliseconds",
       "exclusiveMinimum": 0,
@@ -326,6 +330,11 @@ exports[`tool parameters JSON Schema (wire shape) task 1`] = `
     },
     "description": {
       "description": "A short (3-5 words) description of the task",
+      "type": "string",
+    },
+    "isolation": {
+      "const": "worktree",
+      "description": "Isolate this subagent's work inside a temporary git worktree. The worktree path and branch are included in the subagent's prompt so it can scope all edits there. If the worktree is clean at task completion it is automatically removed; otherwise the path and branch are reported back for you to act on. Requires a git repository.",
       "type": "string",
     },
     "prompt": {
