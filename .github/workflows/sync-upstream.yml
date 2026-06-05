@@ -36,6 +36,10 @@ jobs:
       UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'dev' }}
       FORK_SUFFIX: -dev_ttk
       BASE_BRANCH: dev
+      # Pin all gh CLI operations to this repo — in a fork clone gh defaults
+      # PR operations to the parent repo (anomalyco/opencode), where our
+      # sync branch, base, and labels don't exist.
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Checkout fork dev
         uses: actions/checkout@v4
