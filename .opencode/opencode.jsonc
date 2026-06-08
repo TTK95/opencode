@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+<<<<<<< HEAD
   "provider": {
     "rwth": {
       "npm": "@ai-sdk/openai-compatible",
@@ -50,6 +51,12 @@
     "edit": {
       "packages/opencode/migration/*": "deny"
     }
+=======
+  "provider": {},
+  "permission": {},
+  "reference": {
+    "effect": "github.com/Effect-TS/effect-smol",
+>>>>>>> upstream/dev
   },
   "mcp": {},
   "tools": {
