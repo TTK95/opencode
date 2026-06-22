@@ -13,51 +13,32 @@
  */
 import { expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import fs from "fs/promises"
 import path from "path"
 import { Session } from "@/session/session"
-import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
-import { SessionRevert } from "../../src/session/revert"
 import { SessionSummary } from "../../src/session/summary"
 import { MessageV2 } from "../../src/session/message-v2"
-import * as Log from "@opencode-ai/core/util/log"
+import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Database } from "@opencode-ai/core/database/database"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { provideTmpdirServer } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { TestLLMServer } from "../lib/llm-server"
 
-// Same layer setup as prompt-effect.test.ts
-import { NodeFileSystem } from "@effect/platform-node"
-import { Agent as AgentSvc } from "../../src/agent/agent"
-import { Bus } from "../../src/bus"
-import { Command } from "../../src/command"
-import { Config } from "@/config/config"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "../../src/mcp"
-import { Permission } from "../../src/permission"
-import { Plugin } from "../../src/plugin"
-import { Provider as ProviderSvc } from "@/provider/provider"
-import { Env } from "../../src/env"
-import { Question } from "../../src/question"
-import { Skill } from "../../src/skill"
-import { SystemPrompt } from "../../src/session/system"
-import { Todo } from "../../src/session/todo"
-import { SessionCompaction } from "../../src/session/compaction"
-import { Instruction } from "../../src/session/instruction"
-import { SessionProcessor } from "../../src/session/processor"
-import { SessionRunState } from "../../src/session/run-state"
-import { SessionStatus } from "../../src/session/status"
-import { Snapshot } from "../../src/snapshot"
-import { ToolRegistry } from "@/tool/registry"
-import { Truncate } from "@/tool/truncate"
-import { AppFileSystem } from "@opencode-ai/core/filesystem"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
+<<<<<<< HEAD
 import { Ripgrep } from "../../src/file/ripgrep"
 import { Format } from "../../src/format"
 import { BackgroundShell } from "../../src/shell/background"
 
 void Log.init({ print: false })
+=======
+import { RuntimeFlags } from "@/effect/runtime-flags"
+>>>>>>> upstream/dev
 
 const mcp = Layer.succeed(
   MCP.Service,
@@ -102,6 +83,7 @@ const lsp = Layer.succeed(
   }),
 )
 
+<<<<<<< HEAD
 const status = SessionStatus.layer.pipe(Layer.provideMerge(Bus.layer))
 const run = SessionRunState.layer.pipe(Layer.provide(status))
 const infra = Layer.mergeAll(NodeFileSystem.layer, CrossSpawnSpawner.defaultLayer)
@@ -158,6 +140,26 @@ function makeHttp() {
 }
 
 const it = testEffect(makeHttp())
+=======
+const root = LayerNode.group([
+  SessionPrompt.node,
+  Session.node,
+  SessionProjector.node,
+  SessionSummary.node,
+  Database.node,
+  CrossSpawnSpawner.node,
+  LayerNode.make(TestLLMServer.layer, []),
+])
+const it = testEffect(
+  LayerNode.buildLayer(root, {
+    replacements: [
+      LayerNode.replace(MCP.node, mcp),
+      LayerNode.replace(LSP.node, lsp),
+      LayerNode.replace(RuntimeFlags.node, RuntimeFlags.layer({ experimentalEventSystem: true })),
+    ],
+  }),
+)
+>>>>>>> upstream/dev
 
 const providerCfg = (url: string) => ({
   provider: {
@@ -232,15 +234,19 @@ it.live("tool execution produces non-empty session diff (snapshot race)", () =>
 
       // Verify the tool call completed (in the first assistant message)
       const allMsgs = yield* MessageV2.filterCompactedEffect(session.id)
+      const user = allMsgs.find(
+        (msg): msg is SessionV1.WithParts & { info: SessionV1.User } => msg.info.role === "user",
+      )
       const tool = allMsgs
         .flatMap((m) => m.parts)
-        .find((p): p is MessageV2.ToolPart => p.type === "tool" && p.tool === "bash")
+        .find((p): p is SessionV1.ToolPart => p.type === "tool" && p.tool === "bash")
       expect(tool?.state.status).toBe("completed")
+      if (!user) throw new Error("Expected user message")
 
-      // Poll for diff — summarize() is fire-and-forget
-      let diff: Array<{ file: string }> = []
+      // Poll for the turn diff — summarize() is fire-and-forget.
+      let diff: Array<{ file?: string }> = []
       for (let i = 0; i < 50; i++) {
-        diff = yield* summary.diff({ sessionID: session.id })
+        diff = yield* summary.diff({ sessionID: session.id, messageID: user.info.id })
         if (diff.length > 0) break
         yield* Effect.sleep("100 millis")
       }
