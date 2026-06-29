@@ -299,12 +299,18 @@ export const dict = {
   "mcp.status.connected": "เชื่อมต่อแล้ว",
   "mcp.status.failed": "ล้มเหลว",
   "mcp.status.needs_auth": "ต้องการการตรวจสอบสิทธิ์",
+  "mcp.auth.clickToAuthenticate": "คลิกเพื่อยืนยันตัวตน",
   "mcp.status.disabled": "ปิดใช้งาน",
 
   "dialog.fork.empty": "ไม่มีข้อความให้แตกแขนง",
 
   "dialog.directory.search.placeholder": "ค้นหาโฟลเดอร์",
   "dialog.directory.empty": "ไม่พบโฟลเดอร์",
+  "dialog.directory.action.selectFile": "เลือกไฟล์",
+  "dialog.directory.action.selectFolder": "เลือกโฟลเดอร์",
+  "dialog.directory.root": "ราก",
+  "dialog.directory.parent": "โฟลเดอร์หลัก",
+  "dialog.directory.readError": "ไม่สามารถอ่านโฟลเดอร์นี้ได้",
 
   "dialog.server.title": "เซิร์ฟเวอร์",
   "dialog.server.description": "สลับเซิร์ฟเวอร์ OpenCode ที่แอปนี้เชื่อมต่อด้วย",
@@ -458,7 +464,7 @@ export const dict = {
 
   "error.dev.rootNotFound": "ไม่พบองค์ประกอบรูท คุณลืมเพิ่มใน index.html หรือบางทีแอตทริบิวต์ id อาจสะกดผิด?",
 
-  "error.globalSync.connectFailed": "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ มีเซิร์ฟเวอร์ทำงานอยู่ที่ `{{url}}` หรือไม่?",
+  "error.serverSync.connectFailed": "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ มีเซิร์ฟเวอร์ทำงานอยู่ที่ `{{url}}` หรือไม่?",
   "directory.error.invalidUrl": "ไดเรกทอรีใน URL ไม่ถูกต้อง",
 
   "error.chain.unknown": "ข้อผิดพลาดที่ไม่รู้จัก",
@@ -649,9 +655,6 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "ขยายส่วนเครื่องมือ edit",
   "settings.general.row.editToolPartsExpanded.description":
     "แสดงส่วนเครื่องมือ edit, write และ patch แบบขยายตามค่าเริ่มต้นในไทม์ไลน์",
-  "settings.general.row.showSessionProgressBar.title": "แสดงแถบความคืบหน้าของเซสชัน",
-  "settings.general.row.showSessionProgressBar.description":
-    "แสดงแถบความคืบหน้าแบบเคลื่อนไหวที่ด้านบนของเซสชันเมื่อเอเจนต์กำลังทำงาน",
   "settings.general.row.wayland.title": "ใช้ Wayland แบบเนทีฟ",
   "settings.general.row.wayland.description": "ปิดใช้งาน X11 fallback บน Wayland ต้องรีสตาร์ท",
   "settings.general.row.wayland.tooltip": "บน Linux ที่มีจอภาพรีเฟรชเรตแบบผสม Wayland แบบเนทีฟอาจเสถียรกว่า",
@@ -915,8 +918,8 @@ export const dict = {
   "common.key.insert": "Insert",
   "common.unknown": "ไม่ทราบ",
   "error.page.circular": "[วงกลม]",
-  "error.globalSDK.noServerAvailable": "ไม่มีเซิร์ฟเวอร์",
-  "error.globalSDK.serverNotAvailable": "เซิร์ฟเวอร์ไม่พร้อมใช้งาน",
+  "error.serverSDK.noServerAvailable": "ไม่มีเซิร์ฟเวอร์",
+  "error.serverSDK.serverNotAvailable": "เซิร์ฟเวอร์ไม่พร้อมใช้งาน",
   "error.childStore.persistedCacheCreateFailed": "ไม่สามารถสร้างแคชถาวร",
   "error.childStore.persistedProjectMetadataCreateFailed": "ไม่สามารถสร้างเมตาดาต้าโปรเจกต์ถาวร",
   "error.childStore.persistedProjectIconCreateFailed": "ไม่สามารถสร้างไอคอนโปรเจกต์ถาวร",
