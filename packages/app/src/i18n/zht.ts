@@ -299,12 +299,18 @@ export const dict = {
   "mcp.status.connected": "已連線",
   "mcp.status.failed": "失敗",
   "mcp.status.needs_auth": "需要授權",
+  "mcp.auth.clickToAuthenticate": "點擊以進行授權",
   "mcp.status.disabled": "已停用",
 
   "dialog.fork.empty": "沒有可用於分支的訊息",
 
   "dialog.directory.search.placeholder": "搜尋資料夾",
   "dialog.directory.empty": "找不到資料夾",
+  "dialog.directory.action.selectFile": "選擇檔案",
+  "dialog.directory.action.selectFolder": "選擇資料夾",
+  "dialog.directory.root": "根目錄",
+  "dialog.directory.parent": "上層目錄",
+  "dialog.directory.readError": "無法讀取此資料夾",
 
   "dialog.server.title": "伺服器",
   "dialog.server.description": "切換此應用程式連線的 OpenCode 伺服器。",
@@ -456,7 +462,7 @@ export const dict = {
 
   "error.dev.rootNotFound": "找不到根元素。你是不是忘了把它新增到 index.html? 或者 id 屬性拼錯了?",
 
-  "error.globalSync.connectFailed": "無法連線到伺服器。是否有伺服器正在 `{{url}}` 執行?",
+  "error.serverSync.connectFailed": "無法連線到伺服器。是否有伺服器正在 `{{url}}` 執行?",
   "directory.error.invalidUrl": "URL 中的目錄無效。",
 
   "error.chain.unknown": "未知錯誤",
@@ -644,8 +650,6 @@ export const dict = {
   "settings.general.row.shellToolPartsExpanded.description": "在時間軸中預設展開 shell 工具區塊",
   "settings.general.row.editToolPartsExpanded.title": "展開 edit 工具區塊",
   "settings.general.row.editToolPartsExpanded.description": "在時間軸中預設展開 edit、write 和 patch 工具區塊",
-  "settings.general.row.showSessionProgressBar.title": "顯示工作階段進度列",
-  "settings.general.row.showSessionProgressBar.description": "當代理程式正在運作時，在工作階段頂部顯示動畫進度列",
   "settings.general.row.wayland.title": "使用原生 Wayland",
   "settings.general.row.wayland.description": "在 Wayland 上停用 X11 後備模式。需要重新啟動。",
   "settings.general.row.wayland.tooltip": "在混合更新率螢幕的 Linux 系統上，原生 Wayland 可能更穩定。",
@@ -906,8 +910,8 @@ export const dict = {
   "common.key.insert": "Insert",
   "common.unknown": "未知",
   "error.page.circular": "[循環]",
-  "error.globalSDK.noServerAvailable": "無可用的伺服器",
-  "error.globalSDK.serverNotAvailable": "伺服器無法使用",
+  "error.serverSDK.noServerAvailable": "無可用的伺服器",
+  "error.serverSDK.serverNotAvailable": "伺服器無法使用",
   "error.childStore.persistedCacheCreateFailed": "建立持續性快取失敗",
   "error.childStore.persistedProjectMetadataCreateFailed": "建立持續性專案中繼資料失敗",
   "error.childStore.persistedProjectIconCreateFailed": "建立持續性專案圖示失敗",
