@@ -300,12 +300,18 @@ export const dict = {
   "mcp.status.connected": "povezano",
   "mcp.status.failed": "neuspjelo",
   "mcp.status.needs_auth": "potrebna autentifikacija",
+  "mcp.auth.clickToAuthenticate": "Kliknite za autentifikaciju",
   "mcp.status.disabled": "onemogućeno",
 
   "dialog.fork.empty": "Nema poruka za fork",
 
   "dialog.directory.search.placeholder": "Pretraži foldere",
   "dialog.directory.empty": "Nema pronađenih foldera",
+  "dialog.directory.action.selectFile": "Odaberi datoteku",
+  "dialog.directory.action.selectFolder": "Odaberi folder",
+  "dialog.directory.root": "Korijen",
+  "dialog.directory.parent": "Nadređeni folder",
+  "dialog.directory.readError": "Nije moguće pročitati ovaj folder",
 
   "dialog.server.title": "Serveri",
   "dialog.server.description": "Promijeni na koji se OpenCode server ova aplikacija povezuje.",
@@ -461,7 +467,7 @@ export const dict = {
   "error.dev.rootNotFound":
     "Korijenski element nije pronađen. Da li si zaboravio da ga dodaš u index.html? Ili je možda id atribut pogrešno napisan?",
 
-  "error.globalSync.connectFailed": "Nije moguće povezati se na server. Da li server radi na `{{url}}`?",
+  "error.serverSync.connectFailed": "Nije moguće povezati se na server. Da li server radi na `{{url}}`?",
   "directory.error.invalidUrl": "Nevažeći direktorij u URL-u.",
 
   "error.chain.unknown": "Nepoznata greška",
@@ -657,9 +663,6 @@ export const dict = {
   "settings.general.row.editToolPartsExpanded.title": "Proširi dijelove alata za uređivanje",
   "settings.general.row.editToolPartsExpanded.description":
     "Prikaži dijelove alata za uređivanje, pisanje i patch podrazumijevano proširene na vremenskoj traci",
-  "settings.general.row.showSessionProgressBar.title": "Prikaži traku napretka sesije",
-  "settings.general.row.showSessionProgressBar.description":
-    "Prikaži animiranu traku napretka na vrhu sesije kada agent radi",
   "settings.general.row.wayland.title": "Koristi nativni Wayland",
   "settings.general.row.wayland.description": "Onemogući X11 fallback na Waylandu. Zahtijeva restart.",
   "settings.general.row.wayland.tooltip":
@@ -925,8 +928,8 @@ export const dict = {
   "common.key.insert": "Insert",
   "common.unknown": "nepoznato",
   "error.page.circular": "[Kružno]",
-  "error.globalSDK.noServerAvailable": "Nema dostupnog servera",
-  "error.globalSDK.serverNotAvailable": "Server nije dostupan",
+  "error.serverSDK.noServerAvailable": "Nema dostupnog servera",
+  "error.serverSDK.serverNotAvailable": "Server nije dostupan",
   "error.childStore.persistedCacheCreateFailed": "Nije uspjelo kreiranje trajnog keša",
   "error.childStore.persistedProjectMetadataCreateFailed": "Nije uspjelo kreiranje trajnih metapodataka projekta",
   "error.childStore.persistedProjectIconCreateFailed": "Nije uspjelo kreiranje trajne ikone projekta",
