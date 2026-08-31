@@ -53,6 +53,7 @@ export const BillingTable = mysqlTable(
     ...workspaceIndexes(table),
     uniqueIndex("global_customer_id").on(table.customerID),
     uniqueIndex("global_subscription_id").on(table.subscriptionID),
+    uniqueIndex("global_lite_subscription_id").on(table.liteSubscriptionID),
   ],
 )
 
@@ -128,12 +129,20 @@ export const UsageTable = mysqlTable(
     sessionID: varchar("session_id", { length: 30 }),
     enrichment: json("enrichment").$type<{
       plan: "sub" | "byok" | "lite"
+      costMultiplier?: number
     }>(),
   },
   (table) => [...workspaceIndexes(table), index("usage_time_created").on(table.workspaceID, table.timeCreated)],
 )
 
-export const CouponType = ["BUILDATHON", "GOFREEMONTH", "GO3MONTHS100", "GO6MONTHS100", "GO12MONTHS100"] as const
+export const CouponType = [
+  "BUILDATHON",
+  "GO1MONTH50",
+  "GOFREEMONTH",
+  "GO3MONTHS100",
+  "GO6MONTHS100",
+  "GO12MONTHS100",
+] as const
 export const CouponTable = mysqlTable(
   "coupon",
   {
