@@ -9,7 +9,7 @@ import { Actor } from "@opencode-ai/console-core/actor.js"
 import { Resource } from "@opencode-ai/console-resource"
 import { LiteData } from "@opencode-ai/console-core/lite.js"
 import { BlackData } from "@opencode-ai/console-core/black.js"
-import { User } from "@opencode-ai/console-core/user.js"
+import { Referral } from "@opencode-ai/console-core/referral.js"
 
 export async function POST(input: APIEvent) {
   const body = await Billing.stripe().webhooks.constructEventAsync(
@@ -161,7 +161,9 @@ export async function POST(input: APIEvent) {
             })
 
             if (userEmail) {
-              if (coupon === LiteData.firstMonth100Coupon) {
+              if (coupon === LiteData.firstMonth50Coupon) {
+                await Billing.redeemCoupon(userEmail, "GO1MONTH50")
+              } else if (coupon === LiteData.firstMonth100Coupon) {
                 await Billing.redeemCoupon(userEmail, "GOFREEMONTH")
               } else if (coupon === LiteData.threeMonths100Coupon) {
                 await Billing.redeemCoupon(userEmail, "GO3MONTHS100")
@@ -171,6 +173,13 @@ export async function POST(input: APIEvent) {
                 await Billing.redeemCoupon(userEmail, "GO12MONTHS100")
               }
             }
+          })
+
+          await Referral.completeFromLiteSubscription({
+            workspaceID,
+            userID,
+          }).catch((error) => {
+            console.error("Referral sync failed", error)
           })
         })
       }
@@ -186,6 +195,18 @@ export async function POST(input: APIEvent) {
         await Billing.unsubscribeBlack({ subscriptionID })
       }
     }
+    if (body.type === "customer.subscription.updated") {
+      // Black is retired: no subscription may renew, so undo any renewal made in the billing portal.
+      const subscription = body.data.object
+      if (subscription.items.data[0].price.product !== BlackData.productID()) return "ignored"
+      if (!["active", "trialing", "past_due"].includes(subscription.status)) return "ignored"
+      if (subscription.cancel_at_period_end || subscription.cancel_at) return "ignored"
+
+      await Billing.stripe().subscriptions.update(subscription.id, {
+        cancel_at_period_end: true,
+        cancellation_details: { comment: "Legacy Black retirement: renewal is not allowed" },
+      })
+    }
     if (body.type === "customer.subscription.deleted") {
       const subscriptionID = body.data.object.id
       if (!subscriptionID) throw new Error("Subscription ID not found")
@@ -195,6 +216,13 @@ export async function POST(input: APIEvent) {
         await Billing.unsubscribeLite({ subscriptionID })
       } else if (productID === BlackData.productID()) {
         await Billing.unsubscribeBlack({ subscriptionID })
+      }
+
+      const latestInvoice = body.data.object.latest_invoice
+      const invoiceID = typeof latestInvoice === "string" ? latestInvoice : latestInvoice?.id
+      if (invoiceID) {
+        const invoice = await Billing.stripe().invoices.retrieve(invoiceID)
+        if (invoice.status === "open") await Billing.stripe().invoices.voidInvoice(invoiceID)
       }
     }
     if (body.type === "invoice.payment_succeeded") {
@@ -217,7 +245,7 @@ export async function POST(input: APIEvent) {
           expand: ["discounts", "payments"],
         })
         const paymentID = invoice.payments?.data[0]?.payment.payment_intent as string
-        const couponID = (invoice.discounts[0] as Stripe.Discount).coupon?.id as string
+        const couponID = (invoice.discounts[0] as Stripe.Discount)?.coupon?.id as string
         if (!paymentID) {
           // payment id can be undefined when using coupon
           if (!couponID) throw new Error("Payment ID not found")
